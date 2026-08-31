@@ -6,13 +6,27 @@ export function AdminLogin() {
   const auth = useAuth();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/admin';
+  const [tab, setTab] = useState<'shop' | 'network' | 'contact'>(() => {
+    if (from.startsWith('/admin/network')) return 'network';
+    if (from.startsWith('/admin/contact')) return 'contact';
+    return 'shop';
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (auth.ready && auth.admin) {
-    return <Navigate to={from} replace />;
+    const shopDest =
+      from.startsWith('/admin') &&
+      from !== '/admin/login' &&
+      !from.startsWith('/admin/network') &&
+      !from.startsWith('/admin/contact')
+        ? from
+        : '/admin';
+    const dest =
+      tab === 'network' ? '/admin/network' : tab === 'contact' ? '/admin/contact' : shopDest;
+    return <Navigate to={dest} replace />;
   }
 
   async function onSubmit(event: FormEvent) {
@@ -32,7 +46,39 @@ export function AdminLogin() {
     <main className="auth-screen">
       <form className="auth-panel" onSubmit={(event) => void onSubmit(event)}>
         <p className="auth-kicker">Admin</p>
-        <h1 className="wordmark">Knoll</h1>
+        <h1 className="wordmark wordmark-ui" style={{ fontSize: 42 }}>
+          typology network
+        </h1>
+        <div className="admin-tabs" style={{ margin: '0 0 24px' }}>
+          <button
+            type="button"
+            className={tab === 'shop' ? 'is-active' : undefined}
+            onClick={() => setTab('shop')}
+          >
+            Shop
+          </button>
+          <button
+            type="button"
+            className={tab === 'network' ? 'is-active' : undefined}
+            onClick={() => setTab('network')}
+          >
+            Network
+          </button>
+          <button
+            type="button"
+            className={tab === 'contact' ? 'is-active' : undefined}
+            onClick={() => setTab('contact')}
+          >
+            Contact
+          </button>
+        </div>
+        <p className="hint" style={{ margin: '0 0 20px' }}>
+          {tab === 'shop'
+            ? 'Sign in to lay out the shop board.'
+            : tab === 'network'
+              ? 'Sign in to edit the typology.network landing page.'
+              : 'Sign in to edit the contact popup.'}
+        </p>
         {auth.isLocal ? (
           <p className="hint">
             Local demo mode — any email and password will open the board. Add Supabase

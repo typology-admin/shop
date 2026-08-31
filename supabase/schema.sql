@@ -68,3 +68,50 @@ create policy "Admins can delete items"
 
 grant select on table public.items to anon, authenticated;
 grant insert, update, delete on table public.items to authenticated;
+
+-- Named page hooks on the shop board. Public can read; admins write.
+create table if not exists public.board_sections (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  y double precision not null default 0,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.board_sections enable row level security;
+
+drop policy if exists board_sections_select_public on public.board_sections;
+create policy board_sections_select_public
+  on public.board_sections
+  for select
+  using (true);
+
+drop policy if exists board_sections_insert_admin on public.board_sections;
+create policy board_sections_insert_admin
+  on public.board_sections
+  for insert
+  to authenticated
+  with check (is_network_admin() or app_private.is_admin());
+
+drop policy if exists board_sections_update_admin on public.board_sections;
+create policy board_sections_update_admin
+  on public.board_sections
+  for update
+  to authenticated
+  using (is_network_admin() or app_private.is_admin())
+  with check (is_network_admin() or app_private.is_admin());
+
+drop policy if exists board_sections_delete_admin on public.board_sections;
+create policy board_sections_delete_admin
+  on public.board_sections
+  for delete
+  to authenticated
+  using (is_network_admin() or app_private.is_admin());
+
+grant select on table public.board_sections to anon, authenticated;
+grant insert, update, delete on table public.board_sections to authenticated;
+
+-- Network landing list (public.network_items) is shared with typology.network.
+-- Writes are allowed if is_network_admin() or app_private.is_admin().
+-- Contact pill options live in public.contact_links (same admin check).
+

@@ -12,6 +12,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
       <div className="loading-screen">
         <div>
           <div className="loading-mark" />
+          <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">Checking access…</p>
         </div>
       </div>
@@ -26,7 +27,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     return (
       <div className="empty-screen">
         <div>
-          <h1 className="wordmark">Knoll</h1>
+          <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">
             This account does not have the admin role. In Supabase, set{' '}
             <code>raw_app_meta_data.role</code> to <code>admin</code> (not user_metadata),

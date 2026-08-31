@@ -23,12 +23,11 @@ async function resolveAdmin(user: User | null): Promise<boolean> {
   if (isAdmin(user)) return true;
   const supabase = getSupabase();
   if (!supabase) return false;
-  const { data } = await supabase
-    .from('admin_users')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  return Boolean(data);
+  const [{ data: shopAdmin }, { data: networkAdmin }] = await Promise.all([
+    supabase.from('admin_users').select('user_id').eq('user_id', user.id).maybeSingle(),
+    supabase.from('network_admins').select('user_id').eq('user_id', user.id).maybeSingle(),
+  ]);
+  return Boolean(shopAdmin || networkAdmin);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

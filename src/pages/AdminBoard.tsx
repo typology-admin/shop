@@ -5,7 +5,10 @@ import { AddItemForm, type AddItemDraft } from '../components/AddItemForm.tsx';
 import { AdminBar } from '../components/AdminBar.tsx';
 import { Board } from '../components/Board.tsx';
 import { ItemInspector } from '../components/ItemInspector.tsx';
+import { SectionManager } from '../components/SectionManager.tsx';
+import { SectionRail } from '../components/SectionRail.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { viewportCenterOnCanvas } from '../lib/canvas.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
@@ -23,6 +26,7 @@ export function AdminBoard() {
   const auth = useAuth();
   const navigate = useNavigate();
   const { items, setItems, status, error } = useItems();
+  const { sections, setSections } = useBoardSections();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -141,6 +145,7 @@ export function AdminBoard() {
       <div className="loading-screen">
         <div>
           <div className="loading-mark" />
+          <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">Opening the board…</p>
         </div>
       </div>
@@ -150,6 +155,7 @@ export function AdminBoard() {
   return (
     <div className="admin-page">
       <AdminBar
+        variant="shop"
         email={auth.email}
         isLocal={auth.isLocal}
         panelOpen={panelOpen}
@@ -192,13 +198,15 @@ export function AdminBoard() {
                 <AddItemForm busy={busy} error={formError} onSubmit={handleAdd} />
               </>
             )}
+            <SectionManager sections={sections} onChange={setSections} />
           </aside>
         </>
       ) : null}
+      <SectionRail sections={sections} />
       {items.length === 0 && status === 'ready' ? (
         <div className="empty-screen" style={{ minHeight: 'calc(100vh - var(--bar-h))', paddingTop: 'var(--bar-h)' }}>
           <div>
-            <h1 className="wordmark">Knoll</h1>
+            <h1 className="wordmark wordmark-ui">typology network</h1>
             <p className="lede">Drop a transparent PNG in the tools panel to place the first object.</p>
           </div>
         </div>
