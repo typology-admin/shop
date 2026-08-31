@@ -4,6 +4,14 @@
   "pages_build_output_dir": "./dist",
   "compatibility_date": "2026-08-31",
   "compatibility_flags": ["nodejs_compat"],
+  // Public client values. Vite inlines VITE_* at `npm run build`; Pages only
+  // injects dashboard secrets into Functions, not that Node build.
+  "vars": {
+    "VITE_SUPABASE_URL": "https://xkkwpjiabvlokrtisdmc.supabase.co",
+    "VITE_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Jc_dtUBjAQV-No5d_G_gTA_o4pcpeYc",
+    "VITE_SUPABASE_ANON_KEY": "sb_publishable_Jc_dtUBjAQV-No5d_G_gTA_o4pcpeYc",
+    "VITE_AMAZON_ASSOCIATE_TAG": "typologynetwo-20"
+  },
   "r2_buckets": [
     {
       "binding": "IMAGES",
