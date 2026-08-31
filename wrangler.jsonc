@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "knoll",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "knoll-items"
+    }
+  ]
+}
