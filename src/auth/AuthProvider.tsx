@@ -18,37 +18,58 @@ export type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
+async function resolveAdmin(user: User | null): Promise<boolean> {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  const supabase = getSupabase();
+  if (!supabase) return false;
+  const { data } = await supabase
+    .from('admin_users')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [admin, setAdmin] = useState(false);
   const isLocal = !hasSupabaseConfig();
-  const admin = isLocal ? Boolean(email) : isAdmin(user);
 
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) {
-      setEmail(localSessionEmail());
+      const localEmail = localSessionEmail();
+      setEmail(localEmail);
+      setAdmin(Boolean(localEmail));
       setReady(true);
       return;
     }
 
     let cancelled = false;
 
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled) return;
       const next = data.session;
+      const nextUser = next?.user ?? null;
       setSession(next);
-      setUser(next?.user ?? null);
-      setEmail(next?.user?.email ?? null);
+      setUser(nextUser);
+      setEmail(nextUser?.email ?? null);
+      setAdmin(await resolveAdmin(nextUser));
       setReady(true);
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      const nextUser = next?.user ?? null;
       setSession(next);
-      setUser(next?.user ?? null);
-      setEmail(next?.user?.email ?? null);
+      setUser(nextUser);
+      setEmail(nextUser?.email ?? null);
+      void resolveAdmin(nextUser).then((allowed) => {
+        if (!cancelled) setAdmin(allowed);
+      });
       setReady(true);
     });
 
@@ -63,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       localSignIn(nextEmail);
       setEmail(nextEmail);
+      setAdmin(true);
       setReady(true);
       return;
     }
@@ -78,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       localSignOut();
       setEmail(null);
+      setAdmin(false);
       return;
     }
     await supabase.auth.signOut();

@@ -1,4 +1,4 @@
-import { r2PublicBaseUrl } from './env.ts';
+import { amazonAssociateTag, r2PublicBaseUrl } from './env.ts';
 import { localGetBlob } from './localStore.ts';
 
 const blobUrlCache = new Map<string, string>();
@@ -51,9 +51,28 @@ export function inferStore(url: string): string {
   }
 }
 
+function isAmazonProductHost(hostname: string): boolean {
+  const host = hostname.replace(/^www\./, '').toLowerCase();
+  if (host === 'amzn.to' || host === 'a.co' || host === 'amzn.eu') return false;
+  return host === 'amazon.com' || host.startsWith('amazon.') || host.includes('.amazon.');
+}
+
+/** Append or replace `tag=` on full Amazon product URLs. Short links are left alone. */
+export function withAmazonTag(raw: string, tag = amazonAssociateTag()): string {
+  if (!tag || !raw) return raw;
+  try {
+    const url = new URL(raw);
+    if (!isAmazonProductHost(url.hostname)) return raw;
+    url.searchParams.set('tag', tag);
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function openAffiliate(url: string): void {
   const a = document.createElement('a');
-  a.href = url;
+  a.href = withAmazonTag(url);
   a.target = '_blank';
   a.rel = 'nofollow sponsored noopener';
   a.click();

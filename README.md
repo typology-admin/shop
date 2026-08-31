@@ -31,8 +31,9 @@ Copy `.env.example` to `.env` and fill in what you have:
 | Variable | Where it is used |
 | --- | --- |
 | `VITE_SUPABASE_URL` | Browser Supabase client |
-| `VITE_SUPABASE_ANON_KEY` | Browser Supabase client (anon / publishable key only — never the service role) |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser publishable key (`sb_publishable_…`). `VITE_SUPABASE_ANON_KEY` still works as an alias |
 | `VITE_R2_PUBLIC_BASE_URL` | Optional public R2 base (`https://pub-….r2.dev`). If empty, images are served by `/api/images/:key` |
+| `VITE_AMAZON_ASSOCIATE_TAG` | Amazon Associates id (default `typologynetwo-20`). Stamped onto Amazon product URLs as `?tag=` |
 | `SUPABASE_URL` | Pages Function auth check |
 | `SUPABASE_ANON_KEY` | Pages Function auth check |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | Optional. Lets `npm run dev` upload to real R2 instead of `public/dev-uploads/` |
@@ -41,10 +42,18 @@ Vite only inlines `VITE_*` into the client bundle. Function secrets stay on the 
 
 ## Supabase
 
-1. Create a project.
-2. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. That creates `public.items`, enables RLS (public `select`; `insert`/`update`/`delete` for authenticated admins), and documents the role check.
+1. Create a project (or use an existing one).
+2. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor. That creates `public.items` with public `select` and admin-only writes. Writes are allowed if the user is in `public.admin_users` (`app_private.is_admin()`) **or** JWT `app_metadata.role` is `admin`.
 3. Authentication → enable Email provider. Create the first admin user.
-4. Grant the admin **role in `app_metadata`** (not `user_metadata`, which a user can edit):
+4. Add them to `admin_users` (this project's existing admin table):
+
+```sql
+insert into public.admin_users (user_id)
+select id from auth.users where email = 'you@example.com'
+on conflict do nothing;
+```
+
+Alternatively, set JWT app metadata (user must sign in again afterwards):
 
 ```sql
 update auth.users
@@ -53,16 +62,13 @@ set raw_app_meta_data =
 where email = 'you@example.com';
 ```
 
-5. Sign out and sign in again so the JWT carries `app_metadata.role = "admin"`.
-6. More admins later: run the same update for additional users, or set `"roles": ["admin"]` on `raw_app_meta_data`. There is no role UI in v1.
-
 ## Cloudflare R2
 
 1. Create a bucket named `knoll-items` (or change `bucket_name` in `wrangler.jsonc` to match).
 2. Either:
    - **Public bucket** — enable public access, copy the `pub-….r2.dev` URL into `VITE_R2_PUBLIC_BASE_URL`, and add a CORS rule allowing `GET` from your site (and `http://localhost:5173`) so Konva can read pixels for hit-testing, or
    - **Private bucket** — leave `VITE_R2_PUBLIC_BASE_URL` empty; the Pages Function at `/api/images/:key` streams objects and sends CORS headers.
-3. Bind the bucket to the Pages project as `IMAGES` (already declared in `wrangler.jsonc`).
+3. Bind the bucket to the Pages project as `IMAGES` (already declared in `wrangler.jsonc`). The bucket name in config is `knoll-items`.
 
 ## Cloudflare Pages
 
@@ -73,7 +79,7 @@ Pages Functions live in `functions/` and deploy with the project.
 Set these on the Pages project (Settings → Variables and Secrets):
 
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 - `VITE_R2_PUBLIC_BASE_URL` (optional)
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`

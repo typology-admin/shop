@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { viewportCenterOnCanvas } from '../lib/canvas.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
+import { withAmazonTag } from '../lib/images.ts';
 import {
   createItem,
   deleteItem,
@@ -104,7 +105,7 @@ export function AdminBoard() {
       const created = await createItem({
         id,
         title: draft.title,
-        affiliate_url: draft.affiliateUrl,
+        affiliate_url: withAmazonTag(draft.affiliateUrl),
         store: draft.store,
         image_path: imagePath,
         image_width: width,
@@ -127,8 +128,12 @@ export function AdminBoard() {
 
   function inspectPatch(patch: ItemPatch, shouldCommit = false) {
     if (!selected) return;
-    if (shouldCommit) commit(selected.id, patch);
-    else patchLocal(selected.id, patch);
+    const next =
+      shouldCommit && patch.affiliate_url != null
+        ? { ...patch, affiliate_url: withAmazonTag(patch.affiliate_url) }
+        : patch;
+    if (shouldCommit) commit(selected.id, next);
+    else patchLocal(selected.id, next);
   }
 
   if (status === 'loading') {

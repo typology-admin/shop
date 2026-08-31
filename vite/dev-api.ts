@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { AwsClient } from 'aws4fetch'
 import { loadEnv, type Plugin } from 'vite'
 import { MAX_UPLOAD_BYTES } from '../shared/constants.ts'
-import { bearerToken, fetchAuthedUser, payloadIsAdmin } from '../shared/admin.ts'
+import { bearerToken, fetchAuthedUser, userIsProjectAdmin } from '../shared/admin.ts'
 import {
   assertPngCanBeTransparent,
   objectKey,
@@ -37,7 +37,10 @@ async function readBody(req: IncomingMessage): Promise<Buffer> {
 
 async function requireAdmin(req: IncomingMessage, env: Record<string, string>) {
   const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL
-  const anonKey = env.SUPABASE_ANON_KEY || env.VITE_SUPABASE_ANON_KEY
+  const anonKey =
+    env.SUPABASE_ANON_KEY ||
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    env.VITE_SUPABASE_ANON_KEY
   if (!supabaseUrl || !anonKey) return
   const token = bearerToken(
     typeof req.headers.authorization === 'string' ? req.headers.authorization : null,
@@ -46,7 +49,8 @@ async function requireAdmin(req: IncomingMessage, env: Record<string, string>) {
     throw Object.assign(new Error('Sign in required.'), { status: 401 })
   }
   const user = await fetchAuthedUser(supabaseUrl, anonKey, token)
-  if (!payloadIsAdmin(user)) {
+  const allowed = await userIsProjectAdmin(supabaseUrl, anonKey, token, user)
+  if (!allowed) {
     throw Object.assign(new Error('Admin role required.'), { status: 403 })
   }
 }

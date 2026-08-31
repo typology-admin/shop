@@ -1,5 +1,5 @@
 import { MAX_UPLOAD_BYTES } from '../../shared/constants';
-import { bearerToken, fetchAuthedUser, payloadIsAdmin } from '../../shared/admin';
+import { bearerToken, fetchAuthedUser, userIsProjectAdmin } from '../../shared/admin';
 import {
   assertPngCanBeTransparent,
   bufferHasSeeThroughPixel,
@@ -29,7 +29,13 @@ async function requireAdmin(request: Request, env: Env): Promise<void> {
     throw Object.assign(new Error('Sign in required.'), { status: 401 });
   }
   const user = await fetchAuthedUser(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, token);
-  if (!payloadIsAdmin(user)) {
+  const allowed = await userIsProjectAdmin(
+    env.SUPABASE_URL,
+    env.SUPABASE_ANON_KEY,
+    token,
+    user,
+  );
+  if (!allowed) {
     throw Object.assign(new Error('Admin role required.'), { status: 403 });
   }
 }

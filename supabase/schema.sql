@@ -1,5 +1,6 @@
--- Knoll / Flatlay — items table, RLS, and admin role notes
--- Run this in the Supabase SQL editor (or as a migration).
+-- Knoll shop board — items table and RLS.
+-- Admin writes are allowed if app_private.is_admin() (membership in public.admin_users)
+-- or if JWT app_metadata.role / roles includes "admin".
 
 create table if not exists public.items (
   id uuid primary key default gen_random_uuid(),
@@ -21,15 +22,6 @@ create index if not exists items_z_index_idx on public.items (z_index);
 
 alter table public.items enable row level security;
 
--- Role is read from JWT app_metadata (NOT user_metadata, which users can edit).
--- Grant admin with:
---   update auth.users
---   set raw_app_meta_data = coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin"}'::jsonb
---   where email = 'you@example.com';
--- Then the user must sign in again so the new claim is in the JWT.
--- Add more admins later the same way, or with an array:
---   {"roles": ["admin"]}
-
 drop policy if exists "Public can read items" on public.items;
 create policy "Public can read items"
   on public.items
@@ -42,7 +34,8 @@ create policy "Admins can insert items"
   for insert
   to authenticated
   with check (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    app_private.is_admin()
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     or coalesce((auth.jwt() -> 'app_metadata' -> 'roles') ? 'admin', false)
   );
 
@@ -52,11 +45,13 @@ create policy "Admins can update items"
   for update
   to authenticated
   using (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    app_private.is_admin()
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     or coalesce((auth.jwt() -> 'app_metadata' -> 'roles') ? 'admin', false)
   )
   with check (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    app_private.is_admin()
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     or coalesce((auth.jwt() -> 'app_metadata' -> 'roles') ? 'admin', false)
   );
 
@@ -66,7 +61,8 @@ create policy "Admins can delete items"
   for delete
   to authenticated
   using (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+    app_private.is_admin()
+    or (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
     or coalesce((auth.jwt() -> 'app_metadata' -> 'roles') ? 'admin', false)
   );
 

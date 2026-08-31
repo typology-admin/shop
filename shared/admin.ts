@@ -12,7 +12,7 @@ export async function fetchAuthedUser(
   supabaseUrl: string,
   supabaseAnonKey: string,
   accessToken: string,
-): Promise<{ app_metadata?: { role?: unknown; roles?: unknown } }> {
+): Promise<{ id?: string; app_metadata?: { role?: unknown; roles?: unknown } }> {
   const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -23,8 +23,32 @@ export async function fetchAuthedUser(
     throw new Error('Not authenticated.');
   }
   return (await response.json()) as {
+    id?: string;
     app_metadata?: { role?: unknown; roles?: unknown };
   };
+}
+
+export async function userIsProjectAdmin(
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  accessToken: string,
+  user: { id?: string; app_metadata?: { role?: unknown; roles?: unknown } },
+): Promise<boolean> {
+  if (payloadIsAdmin(user)) return true;
+  if (!user.id) return false;
+  const response = await fetch(
+    `${supabaseUrl.replace(/\/$/, '')}/rest/v1/admin_users?user_id=eq.${user.id}&select=user_id`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: supabaseAnonKey,
+        Accept: 'application/json',
+      },
+    },
+  );
+  if (!response.ok) return false;
+  const rows = (await response.json()) as unknown;
+  return Array.isArray(rows) && rows.length > 0;
 }
 
 export function bearerToken(header: string | null): string | null {
