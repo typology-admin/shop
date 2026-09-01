@@ -1,7 +1,7 @@
 import {
   assertPngCanBeTransparent,
-  bufferHasSeeThroughPixel,
   parsePng,
+  pngHasSeeThroughPixel,
 } from '../../shared/png.ts';
 
 export type InspectedPng = {
@@ -20,20 +20,7 @@ export async function inspectPngFile(file: File): Promise<InspectedPng> {
   const info = parsePng(bytes);
   assertPngCanBeTransparent(info);
 
-  const bitmap = await createImageBitmap(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) {
-    bitmap.close();
-    throw new Error('Could not read PNG pixels in this browser.');
-  }
-  ctx.drawImage(bitmap, 0, 0);
-  const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-  bitmap.close();
-
-  if (!bufferHasSeeThroughPixel(data)) {
+  if (!(await pngHasSeeThroughPixel(bytes))) {
     throw new Error(
       'This PNG has an alpha channel but no transparent pixels. Cut the background out (or export with transparency) so clicks can pass between objects.',
     );
@@ -41,4 +28,3 @@ export async function inspectPngFile(file: File): Promise<InspectedPng> {
 
   return { bytes, width: info.width, height: info.height };
 }
-

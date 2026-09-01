@@ -9,6 +9,7 @@ import {
   assertPngCanBeTransparent,
   objectKey,
   parsePng,
+  pngHasSeeThroughPixel,
 } from '../shared/png.ts'
 
 function json(res: ServerResponse, status: number, body: unknown) {
@@ -107,6 +108,13 @@ export function knollDevApi(): Plugin {
             const bytes = new Uint8Array(buffer)
             const info = parsePng(bytes)
             assertPngCanBeTransparent(info)
+            if (!(await pngHasSeeThroughPixel(bytes))) {
+              json(res, 400, {
+                error:
+                  'This PNG has an alpha channel but no transparent pixels. Export it on a transparent background.',
+              })
+              return
+            }
             const key = objectKey()
             const uploaded = await putR2(env, key, buffer)
             if (uploaded) {

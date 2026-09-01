@@ -2,9 +2,9 @@ import { MAX_UPLOAD_BYTES } from '../../shared/constants';
 import { bearerToken, fetchAuthedUser, userIsProjectAdmin } from '../../shared/admin';
 import {
   assertPngCanBeTransparent,
-  bufferHasSeeThroughPixel,
   objectKey,
   parsePng,
+  pngHasSeeThroughPixel,
 } from '../../shared/png';
 
 type Env = {
@@ -40,21 +40,6 @@ async function requireAdmin(request: Request, env: Env): Promise<void> {
   }
 }
 
-async function hasSeeThroughPixels(bytes: Uint8Array): Promise<boolean> {
-  const blob = new Blob([bytes], { type: 'image/png' });
-  const bitmap = await createImageBitmap(blob);
-  try {
-    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return false;
-    ctx.drawImage(bitmap, 0, 0);
-    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
-    return bufferHasSeeThroughPixel(data);
-  } finally {
-    bitmap.close();
-  }
-}
-
 export async function onRequestPost(context: { request: Request; env: Env }): Promise<Response> {
   try {
     await requireAdmin(context.request, context.env);
@@ -71,7 +56,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     const info = parsePng(bytes);
     assertPngCanBeTransparent(info);
 
-    const transparent = await hasSeeThroughPixels(bytes);
+    const transparent = await pngHasSeeThroughPixel(bytes);
     if (!transparent) {
       return json(
         {
