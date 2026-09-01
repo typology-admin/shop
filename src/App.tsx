@@ -5,6 +5,7 @@ import { AdminBoard } from './pages/AdminBoard.tsx'
 import { AdminContact } from './pages/AdminContact.tsx'
 import { AdminLogin } from './pages/AdminLogin.tsx'
 import { AdminNetwork } from './pages/AdminNetwork.tsx'
+import { AdminAffiliates } from './pages/AdminAffiliates.tsx'
 import { NetworkHome } from './pages/NetworkHome.tsx'
 import { PublicBoard } from './pages/PublicBoard.tsx'
 import { SiteContentPage } from './pages/SiteContentPage.tsx'
@@ -49,6 +50,14 @@ export default function App() {
         element={
           <RequireAdmin>
             <AdminContact />
+          </RequireAdmin>
+        }
+      />
+      <Route
+        path="/admin/affiliates"
+        element={
+          <RequireAdmin>
+            <AdminAffiliates />
           </RequireAdmin>
         }
       />

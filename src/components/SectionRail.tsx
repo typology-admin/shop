@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CANVAS_WIDTH } from '../../shared/constants.ts';
+import { scrollTopForCanvasY } from '../lib/canvas.ts';
 import type { BoardSection } from '../lib/sections.ts';
 
 type Props = {
@@ -7,17 +7,6 @@ type Props = {
 };
 
 const HIDE_DELAY_MS = 3200;
-
-function canvasScale() {
-  return window.innerWidth / CANVAS_WIDTH;
-}
-
-function scrollTopForSection(y: number) {
-  const scale = canvasScale();
-  const target = y * scale - window.innerHeight * 0.28;
-  const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-  return Math.min(max, Math.max(0, target));
-}
 
 function maxScroll() {
   return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
@@ -86,12 +75,14 @@ export function SectionRail({ sections }: Props) {
       {ranked.length > 0 ? (
         <div className={`section-hooks${visible ? ' is-visible' : ''}`}>
           {ranked.map((section) => {
-            const t = scrollTopForSection(section.y) / scrollMax;
+            const t = scrollTopForCanvasY(section.y) / scrollMax;
+            const kit = section.items.map((item) => `${item.emoji} ${item.label}`).join(' · ');
             return (
               <button
                 key={section.id}
                 type="button"
                 className="section-hook chrome-pill"
+                title={kit}
                 style={{ top: `${Math.min(96, Math.max(4, t * 100))}%` }}
                 onPointerEnter={holdOpen}
                 onPointerLeave={releaseOpen}
@@ -99,7 +90,7 @@ export function SectionRail({ sections }: Props) {
                   window.clearTimeout(hideTimer.current);
                   setVisible(true);
                   window.scrollTo({
-                    top: scrollTopForSection(section.y),
+                    top: scrollTopForCanvasY(section.y),
                     behavior: 'smooth',
                   });
                   if (!hovering.current) {

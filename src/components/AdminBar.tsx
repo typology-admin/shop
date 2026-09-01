@@ -1,7 +1,7 @@
 import { AdminTabs } from './AdminTabs.tsx';
 
 type Props = {
-  variant?: 'shop' | 'network' | 'contact';
+  variant?: 'shop' | 'network' | 'contact' | 'affiliates';
   email: string | null;
   isLocal: boolean;
   panelOpen?: boolean;

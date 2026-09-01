@@ -39,6 +39,13 @@ export function viewportCenterOnCanvas(scale: number, scrollY: number, viewportH
   };
 }
 
+export function scrollTopForCanvasY(y: number): number {
+  const scale = window.innerWidth / CANVAS_WIDTH;
+  const target = y * scale - window.innerHeight * 0.28;
+  const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  return Math.min(max, Math.max(0, target));
+}
+
 export function clampScale(value: number): number {
   return Math.min(4, Math.max(0.08, value));
 }

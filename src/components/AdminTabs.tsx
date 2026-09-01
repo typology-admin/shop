@@ -18,6 +18,12 @@ export function AdminTabs() {
       >
         Contact
       </NavLink>
+      <NavLink
+        to="/admin/affiliates"
+        className={({ isActive }) => (isActive ? 'is-active' : undefined)}
+      >
+        Affiliates
+      </NavLink>
     </nav>
   );
 }

@@ -1,14 +1,33 @@
+import { useLayoutEffect, useRef } from 'react';
 import { Board } from '../components/Board.tsx';
 import { SectionRail } from '../components/SectionRail.tsx';
 import { SiteChrome } from '../components/SiteChrome.tsx';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useNetworkItems } from '../hooks/useNetworkItems.ts';
+import { jumpToSection, pickLandingSection } from '../lib/sections.ts';
 
 export function PublicBoard() {
   const { items, status, error } = useItems();
   const { items: networkItems } = useNetworkItems();
   const { sections } = useBoardSections();
+  const landed = useRef(false);
+
+  useLayoutEffect(() => {
+    if (landed.current) return;
+    if (status !== 'ready' || items.length === 0 || sections.length === 0) return;
+    const scene = pickLandingSection(sections);
+    if (!scene) return;
+    landed.current = true;
+    const jump = () => jumpToSection(scene, 'instant');
+    jump();
+    const frame = window.requestAnimationFrame(jump);
+    const timer = window.setTimeout(jump, 120);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [status, items.length, sections]);
 
   if (status === 'loading') {
     return (

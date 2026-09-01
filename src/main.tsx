@@ -5,6 +5,7 @@ import { AuthProvider } from './auth/AuthProvider.tsx'
 import App from './App.tsx'
 import './styles/global.css'
 import './styles/network.css'
+import './styles/affiliates.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

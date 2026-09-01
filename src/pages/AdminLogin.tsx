@@ -6,9 +6,10 @@ export function AdminLogin() {
   const auth = useAuth();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? '/admin';
-  const [tab, setTab] = useState<'shop' | 'network' | 'contact'>(() => {
+  const [tab, setTab] = useState<'shop' | 'network' | 'contact' | 'affiliates'>(() => {
     if (from.startsWith('/admin/network')) return 'network';
     if (from.startsWith('/admin/contact')) return 'contact';
+    if (from.startsWith('/admin/affiliates')) return 'affiliates';
     return 'shop';
   });
   const [email, setEmail] = useState('');
@@ -21,11 +22,18 @@ export function AdminLogin() {
       from.startsWith('/admin') &&
       from !== '/admin/login' &&
       !from.startsWith('/admin/network') &&
-      !from.startsWith('/admin/contact')
+      !from.startsWith('/admin/contact') &&
+      !from.startsWith('/admin/affiliates')
         ? from
         : '/admin';
     const dest =
-      tab === 'network' ? '/admin/network' : tab === 'contact' ? '/admin/contact' : shopDest;
+      tab === 'network'
+        ? '/admin/network'
+        : tab === 'contact'
+          ? '/admin/contact'
+          : tab === 'affiliates'
+            ? '/admin/affiliates'
+            : shopDest;
     return <Navigate to={dest} replace />;
   }
 
@@ -71,13 +79,22 @@ export function AdminLogin() {
           >
             Contact
           </button>
+          <button
+            type="button"
+            className={tab === 'affiliates' ? 'is-active' : undefined}
+            onClick={() => setTab('affiliates')}
+          >
+            Affiliates
+          </button>
         </div>
         <p className="hint" style={{ margin: '0 0 20px' }}>
           {tab === 'shop'
             ? 'Sign in to lay out the shop board.'
             : tab === 'network'
               ? 'Sign in to edit the typology.network landing page.'
-              : 'Sign in to edit the contact popup.'}
+              : tab === 'affiliates'
+                ? 'Sign in to manage AWIN programs and the product catalog.'
+                : 'Sign in to edit the contact popup.'}
         </p>
         {auth.isLocal ? (
           <p className="hint">

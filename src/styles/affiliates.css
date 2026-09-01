@@ -1,0 +1,154 @@
+.affiliate-admin {
+  padding: calc(var(--bar-h) + 24px) 20px 64px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.affiliate-admin h1 {
+  font-family: var(--font-ui);
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  margin: 0 0 8px;
+}
+
+.affiliate-pipeline {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 28px;
+  padding: 0;
+}
+
+.affiliate-pipeline li {
+  border-radius: 16px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(18px) saturate(1.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  padding: 12px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.affiliate-pipeline strong {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.affiliate-pipeline span {
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.3;
+}
+
+.affiliate-leader {
+  margin: 0 0 20px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  background: rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(18px) saturate(1.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+}
+
+.affiliate-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.affiliate-leader h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.affiliate-leader p {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.affiliate-table-wrap {
+  overflow: auto;
+  margin: 16px 0 32px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.affiliate-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.affiliate-table th,
+.affiliate-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(28, 27, 24, 0.1);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.affiliate-table th {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.affiliate-table tr.is-leader td {
+  background: rgba(28, 27, 24, 0.06);
+}
+
+.affiliate-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+}
+
+.affiliate-stat {
+  width: 72px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.4);
+  padding: 6px 10px;
+}
+
+.affiliate-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.affiliate-product-form {
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .affiliate-pipeline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .affiliate-field-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .affiliate-pipeline,
+  .affiliate-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

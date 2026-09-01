@@ -44,7 +44,8 @@ export function SectionManager({ sections, onChange }: Props) {
     <div className="inspector-block">
       <h2 style={{ fontSize: 18, marginBottom: 10 }}>Sections</h2>
       <p className="hint" style={{ margin: '0 0 12px' }}>
-        Named page hooks on the shop board. Add one at the current scroll position.
+        Scene hooks on the shop board. Visitors land on a random scene each load: morning, desk,
+        weekend, workshop, boat.
       </p>
       {error ? <p className="form-error">{error}</p> : null}
       <form onSubmit={(event) => void onAdd(event)}>
@@ -71,6 +72,11 @@ export function SectionManager({ sections, onChange }: Props) {
               void updateBoardSection(section, { name: nextName });
             }}
           />
+          {section.items.length ? (
+            <p className="hint" style={{ margin: 0 }}>
+              {section.items.map((item) => `${item.emoji} ${item.label}`).join(' · ')}
+            </p>
+          ) : null}
           <div className="btn-row">
             <button
               type="button"
