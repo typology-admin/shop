@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useContactLinks } from '../hooks/useContactLinks.ts';
-import { openContactHref } from '../lib/contact.ts';
+import { MOBILE_BREAKPOINT } from '../../shared/constants.ts';
+import { useMediaQuery } from '../hooks/useMediaQuery.ts';
+import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { openAffiliate } from '../lib/images.ts';
 import {
   itemHref,
@@ -9,6 +10,7 @@ import {
   visitNetworkItem,
   type NetworkItem,
 } from '../lib/network.ts';
+import { mailtoHref } from '../lib/siteSettings.ts';
 import type { Item } from '../lib/types.ts';
 
 type Hit =
@@ -19,6 +21,7 @@ type Props = {
   variant: 'shop' | 'network';
   shopItems?: Item[];
   networkItems?: NetworkItem[];
+  onShopItem?: (item: Item) => void;
 };
 
 function SearchIcon() {
@@ -34,11 +37,26 @@ function SearchIcon() {
   );
 }
 
-export function SiteChrome({ variant, shopItems = [], networkItems = [] }: Props) {
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeWidth={2} d="M5 7h14M5 12h14M5 17h14" />
+    </svg>
+  );
+}
+
+export function SiteChrome({
+  variant,
+  shopItems = [],
+  networkItems = [],
+  onShopItem,
+}: Props) {
   const navigate = useNavigate();
-  const { links } = useContactLinks();
+  const { settings } = useSiteSettings();
+  const isMobile = useMediaQuery(`(max-width: ${MOBILE_BREAKPOINT}px)`);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [contactOpen, setContactOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,16 +66,22 @@ export function SiteChrome({ variant, shopItems = [], networkItems = [] }: Props
   }, [searchOpen]);
 
   useEffect(() => {
+    if (!isMobile) setMenuOpen(false);
+  }, [isMobile]);
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         setSearchOpen(false);
-        setContactOpen(false);
+        setAboutOpen(false);
+        setMenuOpen(false);
       }
     }
     function onPointer(event: MouseEvent) {
       if (!wrapRef.current?.contains(event.target as Node)) {
         setSearchOpen(false);
-        setContactOpen(false);
+        setAboutOpen(false);
+        setMenuOpen(false);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -85,113 +109,128 @@ export function SiteChrome({ variant, shopItems = [], networkItems = [] }: Props
 
   function pick(hit: Hit) {
     setSearchOpen(false);
+    setMenuOpen(false);
     setQuery('');
-    if (hit.kind === 'shop') openAffiliate(hit.item.affiliate_url);
-    else visitNetworkItem(hit.item, navigate);
+    if (hit.kind === 'shop') {
+      if (onShopItem) onShopItem(hit.item);
+      else openAffiliate(hit.item.affiliate_url);
+    } else visitNetworkItem(hit.item, navigate);
   }
+
+  const searchControl = searchOpen ? (
+    <div className="chrome-search">
+      <label className="chrome-search-field">
+        <SearchIcon />
+        <span className="sr-only">Search</span>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={variant === 'shop' ? 'Search shop & network…' : 'Search network…'}
+        />
+      </label>
+      {query.trim() && hits.length > 0 ? (
+        <div className="chrome-search-results" role="listbox">
+          {hits.map((hit) =>
+            hit.kind === 'shop' ? (
+              <button
+                key={`shop-${hit.item.id}`}
+                type="button"
+                className="chrome-search-hit"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pick(hit)}
+              >
+                <strong>{hit.item.title || 'Untitled'}</strong>
+                <span>{hit.item.store || 'shop'}</span>
+              </button>
+            ) : (
+              <button
+                key={`net-${hit.item.id}`}
+                type="button"
+                className="chrome-search-hit"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => pick(hit)}
+              >
+                <strong>
+                  {hit.item.prefix}
+                  <span>{hit.item.suffix}</span>
+                </strong>
+                <span>{itemHref(hit.item).replace(/^https?:\/\//, '')}</span>
+              </button>
+            ),
+          )}
+        </div>
+      ) : null}
+    </div>
+  ) : (
+    <button
+      type="button"
+      className="chrome-search-toggle"
+      aria-label="Search"
+      onClick={() => {
+        setAboutOpen(false);
+        setSearchOpen(true);
+      }}
+    >
+      <SearchIcon />
+    </button>
+  );
+
+  const aboutControl = (
+    <div className="chrome-contact">
+      <button
+        type="button"
+        className={`chrome-pill${aboutOpen ? ' is-open' : ''}`}
+        aria-expanded={aboutOpen}
+        aria-haspopup="dialog"
+        onClick={() => {
+          setSearchOpen(false);
+          setAboutOpen((open) => !open);
+        }}
+      >
+        about
+      </button>
+      {aboutOpen ? (
+        <div className="chrome-about-menu" role="dialog" aria-label="About">
+          <p>{settings.aboutText}</p>
+          <a
+            className="chrome-pill chrome-about-mail"
+            href={mailtoHref(settings.contactEmail)}
+            onClick={() => setAboutOpen(false)}
+          >
+            contact
+          </a>
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <div className="site-chrome" ref={wrapRef}>
-      {searchOpen ? (
-        <div className="chrome-search">
-          <label className="chrome-search-field">
-            <SearchIcon />
-            <span className="sr-only">Search</span>
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={variant === 'shop' ? 'Search shop & network…' : 'Search network…'}
-            />
-          </label>
-          {query.trim() && hits.length > 0 ? (
-            <div className="chrome-search-results" role="listbox">
-              {hits.map((hit) =>
-                hit.kind === 'shop' ? (
-                  <button
-                    key={`shop-${hit.item.id}`}
-                    type="button"
-                    className="chrome-search-hit"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => pick(hit)}
-                  >
-                    <strong>{hit.item.title || 'Untitled'}</strong>
-                    <span>{hit.item.store || 'shop'}</span>
-                  </button>
-                ) : (
-                  <button
-                    key={`net-${hit.item.id}`}
-                    type="button"
-                    className="chrome-search-hit"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => pick(hit)}
-                  >
-                    <strong>
-                      {hit.item.prefix}
-                      <span>{hit.item.suffix}</span>
-                    </strong>
-                    <span>{itemHref(hit.item).replace(/^https?:\/\//, '')}</span>
-                  </button>
-                ),
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : (
+      {isMobile ? (
         <button
           type="button"
-          className="chrome-search-toggle"
-          aria-label="Search"
+          className={`chrome-search-toggle chrome-menu-toggle${menuOpen ? ' is-open' : ''}`}
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
           onClick={() => {
-            setContactOpen(false);
-            setSearchOpen(true);
-          }}
-        >
-          <SearchIcon />
-        </button>
-      )}
-
-      {variant === 'shop' ? (
-        <Link className="chrome-pill" to="/network">
-          network
-        </Link>
-      ) : (
-        <Link className="chrome-pill" to="/">
-          shop
-        </Link>
-      )}
-
-      <div className="chrome-contact">
-        <button
-          type="button"
-          className={`chrome-pill${contactOpen ? ' is-open' : ''}`}
-          aria-expanded={contactOpen}
-          aria-haspopup="menu"
-          onClick={() => {
+            setMenuOpen((open) => !open);
             setSearchOpen(false);
-            setContactOpen((open) => !open);
+            setAboutOpen(false);
           }}
         >
-          contact
+          <MenuIcon />
         </button>
-        {contactOpen ? (
-          <div className="chrome-contact-menu" role="menu">
-            {links.map((link) => (
-              <button
-                key={link.id}
-                type="button"
-                role="menuitem"
-                className="chrome-search-hit"
-                onClick={() => {
-                  setContactOpen(false);
-                  openContactHref(link.href, navigate);
-                }}
-              >
-                <strong>{link.label}</strong>
-              </button>
-            ))}
-          </div>
+      ) : null}
+
+      <div className={`chrome-actions${isMobile && menuOpen ? ' is-open' : ''}`}>
+        {searchControl}
+        {variant === 'network' ? (
+          <Link className="chrome-pill" to="/">
+            shop
+          </Link>
         ) : null}
+        {aboutControl}
       </div>
     </div>
   );

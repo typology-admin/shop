@@ -21,6 +21,17 @@ body.is-network {
   pointer-events: auto;
 }
 
+.chrome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.chrome-menu-toggle {
+  display: none;
+}
+
 .chrome-search {
   position: relative;
   display: flex;
@@ -65,7 +76,8 @@ body.is-network {
 
 .chrome-pill:hover,
 .chrome-pill.is-open,
-.chrome-search-toggle:hover {
+.chrome-search-toggle:hover,
+.chrome-search-toggle.is-open {
   background: rgba(255, 255, 255, 0.46);
   border-color: rgba(28, 27, 24, 0.28);
 }
@@ -74,7 +86,8 @@ body.is-network {
   position: relative;
 }
 
-.chrome-contact-menu {
+.chrome-contact-menu,
+.chrome-about-menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -87,6 +100,27 @@ body.is-network {
   -webkit-backdrop-filter: blur(18px) saturate(1.45);
   padding: 6px;
   z-index: 50;
+}
+
+.chrome-about-menu {
+  width: min(280px, calc(100vw - 32px));
+  padding: 14px 14px 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.chrome-about-menu p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.chrome-about-mail {
+  justify-self: start;
+  min-width: 0;
+  height: 30px;
+  padding: 0 16px;
 }
 
 .chrome-search-field {
@@ -456,10 +490,40 @@ body.is-network {
   .site-chrome {
     top: 10px;
     right: 10px;
-    left: 10px;
+    left: auto;
+  }
+
+  .chrome-menu-toggle {
+    display: inline-flex;
+  }
+
+  .chrome-actions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(28, 27, 24, 0.16);
+    background: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
+    backdrop-filter: blur(18px) saturate(1.45);
+    -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  }
+
+  .chrome-actions.is-open {
+    display: flex;
   }
 
   .chrome-search-field {
-    width: min(220px, calc(100vw - 160px));
+    width: min(220px, calc(100vw - 48px));
+  }
+
+  .chrome-about-menu,
+  .chrome-search-results {
+    right: 0;
   }
 }

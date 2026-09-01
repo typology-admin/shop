@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AdminBar } from '../components/AdminBar.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useContactLinks } from '../hooks/useContactLinks.ts';
+import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 import {
   deleteContactLink,
   insertContactLink,
@@ -14,10 +15,12 @@ export function AdminContact() {
   const auth = useAuth();
   const navigate = useNavigate();
   const { links, setLinks, error, reload } = useContactLinks();
+  const { settings, setSettings, save, error: settingsError } = useSiteSettings();
   const [label, setLabel] = useState('');
   const [href, setHref] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ContactLink | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
 
   async function onAdd(event: FormEvent) {
     event.preventDefault();
@@ -55,6 +58,19 @@ export function AdminContact() {
     }
   }
 
+  async function onSaveCopy(event: FormEvent) {
+    event.preventDefault();
+    setSettingsBusy(true);
+    setFormError(null);
+    try {
+      await save(settings);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not save site copy.');
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
   return (
     <div className="admin-page">
       <AdminBar
@@ -66,26 +82,50 @@ export function AdminContact() {
         }}
       />
       <main className="network-admin">
-        <h1>Contact</h1>
+        <h1>Site</h1>
         <p className="network-admin-lede">
-          These rows appear in the contact pill popup: support, sale, and buy by default. Use a
-          mailto, a full URL, or a path like <code>/</code>.
+          About copy appears in the about pill. Footer links sit at the bottom of the shop board
+          with the network link.
         </p>
         {error ? <p className="form-error">{error}</p> : null}
+        {settingsError ? <p className="form-error">{settingsError}</p> : null}
         {formError ? <p className="form-error">{formError}</p> : null}
 
+        <form className="network-admin-form" onSubmit={(event) => void onSaveCopy(event)}>
+          <h2>About</h2>
+          <label className="field">
+            <span>About text</span>
+            <textarea
+              rows={6}
+              value={settings.aboutText}
+              onChange={(event) => setSettings({ ...settings, aboutText: event.target.value })}
+            />
+          </label>
+          <label className="field">
+            <span>Contact email</span>
+            <input
+              type="email"
+              value={settings.contactEmail}
+              onChange={(event) => setSettings({ ...settings, contactEmail: event.target.value })}
+            />
+          </label>
+          <button className="btn" type="submit" disabled={settingsBusy}>
+            {settingsBusy ? 'Saving…' : 'Save about'}
+          </button>
+        </form>
+
         <form className="network-admin-form" onSubmit={(event) => void onAdd(event)}>
-          <h2>Add option</h2>
+          <h2>Footer links</h2>
           <label className="field">
             <span>Label</span>
-            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="press" />
+            <input value={label} onChange={(event) => setLabel(event.target.value)} placeholder="instagram" />
           </label>
           <label className="field">
             <span>Link</span>
             <input
               value={href}
               onChange={(event) => setHref(event.target.value)}
-              placeholder="mailto:hello@typology.network"
+              placeholder="https://instagram.com/typology.network"
             />
           </label>
           <button className="btn" type="submit" disabled={!label.trim()}>
@@ -150,7 +190,7 @@ export function AdminContact() {
 
         <p className="hint">
           <button type="button" className="text-btn" onClick={() => void reload()}>
-            Reload from database
+            Reload links from database
           </button>
         </p>
       </main>

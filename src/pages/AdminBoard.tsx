@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CANVAS_WIDTH } from '../../shared/constants.ts';
 import { AddItemForm, type AddItemDraft } from '../components/AddItemForm.tsx';
 import { AdminBar } from '../components/AdminBar.tsx';
 import { Board } from '../components/Board.tsx';
 import { ItemInspector } from '../components/ItemInspector.tsx';
 import { SectionManager } from '../components/SectionManager.tsx';
 import { SectionRail } from '../components/SectionRail.tsx';
+import { ViewZoomSettings } from '../components/ViewZoomSettings.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useItems } from '../hooks/useItems.ts';
-import { viewportCenterOnCanvas } from '../lib/canvas.ts';
+import { useBoardZoom } from '../hooks/useSiteSettings.ts';
+import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { withAmazonTag } from '../lib/images.ts';
 import {
@@ -27,6 +28,7 @@ export function AdminBoard() {
   const navigate = useNavigate();
   const { items, setItems, status, error } = useItems();
   const { sections, setSections } = useBoardSections();
+  const zoom = useBoardZoom();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -88,7 +90,7 @@ export function AdminBoard() {
     setBusy(true);
     setFormError(null);
     try {
-      const scale = window.innerWidth / CANVAS_WIDTH;
+      const scale = boardScale(window.innerWidth, zoom);
       const center = viewportCenterOnCanvas(scale, window.scrollY, window.innerHeight);
       const maxZ = items.reduce((max, item) => Math.max(max, item.z_index), 0);
       const id = crypto.randomUUID();
@@ -198,7 +200,8 @@ export function AdminBoard() {
                 <AddItemForm busy={busy} error={formError} onSubmit={handleAdd} />
               </>
             )}
-            <SectionManager sections={sections} onChange={setSections} />
+            <SectionManager sections={sections} onChange={setSections} zoom={zoom} />
+            <ViewZoomSettings />
           </aside>
         </>
       ) : null}
@@ -214,6 +217,7 @@ export function AdminBoard() {
         <Board
           items={items}
           mode="admin"
+          zoom={zoom}
           selectedId={selectedId}
           onSelect={handleSelect}
           onCommit={commit}

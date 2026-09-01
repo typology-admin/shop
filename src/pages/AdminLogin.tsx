@@ -77,7 +77,7 @@ export function AdminLogin() {
             className={tab === 'contact' ? 'is-active' : undefined}
             onClick={() => setTab('contact')}
           >
-            Contact
+            Site
           </button>
           <button
             type="button"
@@ -94,7 +94,7 @@ export function AdminLogin() {
               ? 'Sign in to edit the typology.network landing page.'
               : tab === 'affiliates'
                 ? 'Sign in to manage AWIN programs and the product catalog.'
-                : 'Sign in to edit the contact popup.'}
+                : 'Sign in to edit about copy, contact email, and footer links.'}
         </p>
         {auth.isLocal ? (
           <p className="hint">

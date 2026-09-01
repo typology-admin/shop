@@ -7,13 +7,21 @@ import { ProductNode } from './ProductNode.tsx';
 type Props = {
   items: Item[];
   mode: 'public' | 'admin';
+  zoom?: number;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onCommit?: (id: string, patch: ItemPatch) => void;
 };
 
-export function Board({ items, mode, selectedId = null, onSelect, onCommit }: Props) {
-  const fit = useStageFit(items);
+export function Board({
+  items,
+  mode,
+  zoom = 1,
+  selectedId = null,
+  onSelect,
+  onCommit,
+}: Props) {
+  const fit = useStageFit(items, zoom);
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
 
   const sorted = useMemo(
@@ -33,6 +41,7 @@ export function Board({ items, mode, selectedId = null, onSelect, onCommit }: Pr
       <Stage
         width={fit.stageWidth}
         height={fit.stageHeight}
+        x={fit.stageX}
         scaleX={fit.scale}
         scaleY={fit.scale}
         onMouseDown={(event) => {

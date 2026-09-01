@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { CANVAS_WIDTH } from '../../shared/constants.ts';
-import { viewportCenterOnCanvas } from '../lib/canvas.ts';
+import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
 import {
   deleteBoardSection,
   insertBoardSection,
@@ -11,14 +10,15 @@ import {
 type Props = {
   sections: BoardSection[];
   onChange: (sections: BoardSection[]) => void;
+  zoom?: number;
 };
 
-export function SectionManager({ sections, onChange }: Props) {
+export function SectionManager({ sections, onChange, zoom = 1 }: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   function currentY() {
-    const scale = window.innerWidth / CANVAS_WIDTH;
+    const scale = boardScale(window.innerWidth, zoom);
     return viewportCenterOnCanvas(scale, window.scrollY, window.innerHeight).y;
   }
 

@@ -162,5 +162,45 @@ create table if not exists public.affiliate_products (
 
 -- Network landing list (public.network_items) is shared with typology.network.
 -- Writes are allowed if is_network_admin() or app_private.is_admin().
--- Contact pill options live in public.contact_links (same admin check).
+-- Footer social links live in public.contact_links (same admin check).
+-- Shop about copy and view zoom live in public.site_settings.
+
+create table if not exists public.site_settings (
+  id text primary key default 'shop',
+  desktop_zoom numeric(4,2) not null default 1.00,
+  mobile_zoom numeric(4,2) not null default 1.20,
+  about_text text not null default '',
+  contact_email text not null default 'info@typology.network',
+  updated_at timestamptz not null default now()
+);
+
+alter table public.site_settings enable row level security;
+
+drop policy if exists site_settings_select_public on public.site_settings;
+create policy site_settings_select_public
+  on public.site_settings
+  for select
+  using (true);
+
+drop policy if exists site_settings_insert_admin on public.site_settings;
+create policy site_settings_insert_admin
+  on public.site_settings
+  for insert
+  to authenticated
+  with check (is_network_admin() or app_private.is_admin());
+
+drop policy if exists site_settings_update_admin on public.site_settings;
+create policy site_settings_update_admin
+  on public.site_settings
+  for update
+  to authenticated
+  using (is_network_admin() or app_private.is_admin())
+  with check (is_network_admin() or app_private.is_admin());
+
+grant select on table public.site_settings to anon, authenticated;
+grant insert, update on table public.site_settings to authenticated;
+
+insert into public.site_settings (id)
+values ('shop')
+on conflict (id) do nothing;
 

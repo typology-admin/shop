@@ -16,7 +16,7 @@ export function AdminTabs() {
         to="/admin/contact"
         className={({ isActive }) => (isActive ? 'is-active' : undefined)}
       >
-        Contact
+        Site
       </NavLink>
       <NavLink
         to="/admin/affiliates"

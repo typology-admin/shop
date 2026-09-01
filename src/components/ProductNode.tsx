@@ -6,7 +6,6 @@ import type { Image as KonvaImageNode } from 'konva/lib/shapes/Image';
 import type { Transformer as KonvaTransformerNode } from 'konva/lib/shapes/Transformer';
 import { useProductImage } from '../hooks/useProductImage.ts';
 import { clampScale } from '../lib/canvas.ts';
-import { openAffiliate } from '../lib/images.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 
 type Props = {
@@ -60,11 +59,7 @@ export function ProductNode({
 
   function handleClick(event: KonvaEventObject<MouseEvent | TouchEvent | Event>) {
     event.cancelBubble = true;
-    if (admin) {
-      onSelect(item.id);
-      return;
-    }
-    if (item.affiliate_url) openAffiliate(item.affiliate_url);
+    onSelect(item.id);
   }
 
   return (

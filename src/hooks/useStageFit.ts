@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CANVAS_WIDTH } from '../../shared/constants.ts';
-import { boardHeight } from '../lib/canvas.ts';
+import { boardHeight, boardScale, setActiveViewZoom } from '../lib/canvas.ts';
 import type { Item } from '../lib/types.ts';
 
 function viewport() {
@@ -10,7 +10,7 @@ function viewport() {
   };
 }
 
-export function useStageFit(items: Item[]) {
+export function useStageFit(items: Item[], zoom: number) {
   const [size, setSize] = useState(viewport);
 
   useEffect(() => {
@@ -19,8 +19,13 @@ export function useStageFit(items: Item[]) {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const scale = size.width / CANVAS_WIDTH;
-  const canvasHeight = boardHeight(items, size.width, size.height);
+  useEffect(() => {
+    setActiveViewZoom(zoom);
+  }, [zoom]);
+
+  const scale = boardScale(size.width, zoom);
+  const canvasHeight = boardHeight(items, size.width, size.height, zoom);
+  const drawnWidth = CANVAS_WIDTH * scale;
 
   return {
     scale,
@@ -28,6 +33,7 @@ export function useStageFit(items: Item[]) {
     canvasHeight,
     stageWidth: size.width,
     stageHeight: canvasHeight * scale,
+    stageX: (size.width - drawnWidth) / 2,
     viewportWidth: size.width,
     viewportHeight: size.height,
   };
