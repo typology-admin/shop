@@ -107,6 +107,16 @@ export function SiteChrome({
     return next.slice(0, 12);
   }, [query, shopItems, networkItems]);
 
+  const overlayOpen =
+    aboutOpen ||
+    (isMobile && menuOpen) ||
+    (searchOpen && query.trim().length > 0 && hits.length > 0);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('chrome-overlay-open', overlayOpen);
+    return () => document.documentElement.classList.remove('chrome-overlay-open');
+  }, [overlayOpen]);
+
   function pick(hit: Hit) {
     setSearchOpen(false);
     setMenuOpen(false);
@@ -131,34 +141,36 @@ export function SiteChrome({
       </label>
       {query.trim() && hits.length > 0 ? (
         <div className="chrome-search-results" role="listbox">
-          {hits.map((hit) =>
-            hit.kind === 'shop' ? (
-              <button
-                key={`shop-${hit.item.id}`}
-                type="button"
-                className="chrome-search-hit"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => pick(hit)}
-              >
-                <strong>{hit.item.title || 'Untitled'}</strong>
-                <span>{hit.item.store || 'shop'}</span>
-              </button>
-            ) : (
-              <button
-                key={`net-${hit.item.id}`}
-                type="button"
-                className="chrome-search-hit"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => pick(hit)}
-              >
-                <strong>
-                  {hit.item.prefix}
-                  <span>{hit.item.suffix}</span>
-                </strong>
-                <span>{itemHref(hit.item).replace(/^https?:\/\//, '')}</span>
-              </button>
-            ),
-          )}
+          <div className="chrome-search-results-scroll">
+            {hits.map((hit) =>
+              hit.kind === 'shop' ? (
+                <button
+                  key={`shop-${hit.item.id}`}
+                  type="button"
+                  className="chrome-search-hit"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pick(hit)}
+                >
+                  <strong>{hit.item.title || 'Untitled'}</strong>
+                  <span>{hit.item.store || 'shop'}</span>
+                </button>
+              ) : (
+                <button
+                  key={`net-${hit.item.id}`}
+                  type="button"
+                  className="chrome-search-hit"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => pick(hit)}
+                >
+                  <strong>
+                    {hit.item.prefix}
+                    <span>{hit.item.suffix}</span>
+                  </strong>
+                  <span>{itemHref(hit.item).replace(/^https?:\/\//, '')}</span>
+                </button>
+              ),
+            )}
+          </div>
         </div>
       ) : null}
     </div>
@@ -192,7 +204,14 @@ export function SiteChrome({
       </button>
       {aboutOpen ? (
         <div className="chrome-about-menu" role="dialog" aria-label="About">
-          <p>{settings.aboutText}</p>
+          {settings.aboutText
+            .replace(/\r\n/g, '\n')
+            .split(/\n{2,}/)
+            .map((block) => block.trim())
+            .filter(Boolean)
+            .map((block, index) => (
+              <p key={index}>{block}</p>
+            ))}
           <a
             className="chrome-pill chrome-about-mail"
             href={mailtoHref(settings.contactEmail)}

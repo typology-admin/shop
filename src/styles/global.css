@@ -455,6 +455,46 @@ a {
   color: var(--ink-muted);
 }
 
+.dropzone-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.cutout-preview {
+  margin: -8px 0 16px;
+  padding: 12px;
+  background: repeating-conic-gradient(#d8d4c8 0% 25%, #eeeae0 0% 50%) 0 0 / 16px 16px;
+}
+
+.cutout-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  margin: 0 auto 8px;
+  object-fit: contain;
+}
+
+.cutout-preview .file-chip {
+  margin: 0;
+  background: var(--paper);
+  padding: 6px 8px;
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-muted);
+}
+
+.form-status {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: 0 0 12px;
+}
+
 .file-chip {
   display: flex;
   justify-content: space-between;
@@ -613,16 +653,29 @@ a {
   }
 }
 
+html.chrome-overlay-open .board-scroll,
+html.chrome-overlay-open .scroll-rail,
+html.chrome-overlay-open .shop-footer {
+  filter: blur(20px);
+}
+
+html.item-modal-open .board-scroll,
+html.item-modal-open .site-chrome,
+html.item-modal-open .scroll-rail,
+html.item-modal-open .shop-footer {
+  filter: blur(40px);
+  pointer-events: none;
+}
+
 .item-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 200;
+  isolation: isolate;
   display: grid;
   place-items: center;
   padding: 28px 16px;
-  background: rgba(197, 193, 182, 0.38);
-  backdrop-filter: blur(22px) saturate(1.2);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  background: rgba(197, 193, 182, 0.88);
 }
 
 .item-modal {
@@ -727,12 +780,14 @@ a {
   left: 0;
   bottom: calc(100% + 6px);
   min-width: 148px;
+  display: grid;
+  gap: 4px;
   border-radius: 16px;
   border: 1px solid rgba(28, 27, 24, 0.16);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.42);
   box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
-  backdrop-filter: blur(18px) saturate(1.45);
-  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
   padding: 6px;
   z-index: 2;
 }

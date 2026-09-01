@@ -12,4 +12,4 @@ export const DEFAULT_MOBILE_ZOOM = 1.2;
 export const MIN_VIEW_ZOOM = 1;
 export const MAX_VIEW_ZOOM = 1.8;
 export const INSTAGRAM_POST_WIDTH = 1080;
-export const INSTAGRAM_POST_HEIGHT = 1350;
+export const INSTAGRAM_POST_HEIGHT = 1080;

@@ -197,7 +197,12 @@ export function AdminBoard() {
             ) : (
               <>
                 <h2>Add item</h2>
-                <AddItemForm busy={busy} error={formError} onSubmit={handleAdd} />
+                <AddItemForm
+                  busy={busy}
+                  error={formError}
+                  accessToken={auth.session?.access_token ?? null}
+                  onSubmit={handleAdd}
+                />
               </>
             )}
             <SectionManager sections={sections} onChange={setSections} zoom={zoom} />
@@ -210,7 +215,7 @@ export function AdminBoard() {
         <div className="empty-screen" style={{ minHeight: 'calc(100vh - var(--bar-h))', paddingTop: 'var(--bar-h)' }}>
           <div>
             <h1 className="wordmark wordmark-ui">typology network</h1>
-            <p className="lede">Drop a transparent PNG in the tools panel to place the first object.</p>
+            <p className="lede">Drop a product photo or paste an Amazon link to place the first object.</p>
           </div>
         </div>
       ) : (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { inspectPngFile } from '../lib/pngClient.ts';
+import { assertItemImageFile } from '../lib/pngClient.ts';
 
 type Props = {
   disabled?: boolean;
@@ -26,10 +26,10 @@ export function PngDropzone({ disabled, onFile, onError }: Props) {
   async function takeFile(file: File | undefined) {
     if (!file || disabled) return;
     try {
-      await inspectPngFile(file);
+      assertItemImageFile(file);
       onFile(file);
     } catch (err) {
-      onError(err instanceof Error ? err.message : 'Could not read that PNG.');
+      onError(err instanceof Error ? err.message : 'Could not read that photo.');
     }
   }
 
@@ -51,7 +51,7 @@ export function PngDropzone({ disabled, onFile, onError }: Props) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/png"
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
         className="sr-only"
         disabled={disabled}
         onChange={(event) => {
@@ -59,15 +59,16 @@ export function PngDropzone({ disabled, onFile, onError }: Props) {
           event.target.value = '';
         }}
       />
-      <p className="dropzone-label">Transparent PNG</p>
+      <p className="dropzone-label">Product photo</p>
       <button
         type="button"
         className="text-btn"
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        Drop a file here or choose one
+        Drop a JPG or PNG, or choose one
       </button>
+      <p className="dropzone-hint">White studio backgrounds are removed automatically.</p>
     </div>
   );
 }

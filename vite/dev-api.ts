@@ -5,6 +5,7 @@ import { AwsClient } from 'aws4fetch'
 import { loadEnv, type Plugin } from 'vite'
 import { MAX_UPLOAD_BYTES } from '../shared/constants.ts'
 import { bearerToken, fetchAuthedUser, userIsProjectAdmin } from '../shared/admin.ts'
+import { fetchProductHero } from '../shared/fetchProductImage.ts'
 import {
   assertPngCanBeTransparent,
   objectKey,
@@ -89,6 +90,44 @@ export function knollDevApi(): Plugin {
     name: 'knoll-dev-api',
     configureServer(server) {
       const env = loadEnv(server.config.mode, process.cwd(), '')
+
+      server.middlewares.use('/api/product-image', (req, res, next) => {
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204
+          res.end()
+          return
+        }
+        if (req.method !== 'POST') {
+          next()
+          return
+        }
+
+        void (async () => {
+          try {
+            await requireAdmin(req, env)
+            const raw = await readBody(req)
+            const payload = JSON.parse(raw.toString('utf8')) as { url?: unknown }
+            const url = typeof payload.url === 'string' ? payload.url.trim() : ''
+            if (!url) {
+              json(res, 400, { error: 'Paste a product URL.' })
+              return
+            }
+            const hero = await fetchProductHero(url)
+            res.statusCode = 200
+            res.setHeader('Content-Type', hero.contentType)
+            res.setHeader('Cache-Control', 'no-store')
+            if (hero.title) {
+              res.setHeader('X-Product-Title', encodeURIComponent(hero.title))
+            }
+            res.end(Buffer.from(hero.bytes))
+          } catch (err) {
+            const status = (err as { status?: number }).status ?? 400
+            const message =
+              err instanceof Error ? err.message : 'Could not fetch a product image.'
+            json(res, status, { error: message })
+          }
+        })()
+      })
 
       server.middlewares.use('/api/upload', (req, res, next) => {
         if (req.method === 'OPTIONS') {

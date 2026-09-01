@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { openAffiliate, resolveImageUrl } from '../lib/images.ts';
 import { copyItemLink, exportInstagramPostPng } from '../lib/itemShare.ts';
 import type { Item } from '../lib/types.ts';
@@ -35,6 +36,7 @@ export function ItemModal({ item, onClose }: Props) {
     const html = document.documentElement;
     const previous = html.style.overflow;
     html.style.overflow = 'hidden';
+    html.classList.add('item-modal-open');
 
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
@@ -42,6 +44,7 @@ export function ItemModal({ item, onClose }: Props) {
     window.addEventListener('keydown', onKey);
     return () => {
       html.style.overflow = previous;
+      html.classList.remove('item-modal-open');
       window.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
@@ -73,7 +76,7 @@ export function ItemModal({ item, onClose }: Props) {
   const title = item.title.trim();
   const store = item.store.trim();
 
-  return (
+  return createPortal(
     <div
       className="item-modal-backdrop"
       onMouseDown={(event) => {
@@ -148,6 +151,7 @@ export function ItemModal({ item, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

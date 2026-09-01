@@ -94,10 +94,10 @@ body.is-network {
   min-width: 140px;
   border-radius: 16px;
   border: 1px solid rgba(28, 27, 24, 0.16);
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.42);
   box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
-  backdrop-filter: blur(18px) saturate(1.45);
-  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
   padding: 6px;
   z-index: 50;
 }
@@ -114,6 +114,8 @@ body.is-network {
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .chrome-about-mail {
@@ -163,16 +165,22 @@ body.is-network {
   top: calc(100% + 6px);
   right: 0;
   width: 260px;
-  max-height: 320px;
-  overflow: auto;
   border-radius: 16px;
   border: 1px solid rgba(28, 27, 24, 0.16);
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.42);
   box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
-  backdrop-filter: blur(18px) saturate(1.45);
-  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
   padding: 6px;
   z-index: 50;
+  overflow: visible;
+}
+
+.chrome-search-results-scroll {
+  display: grid;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
 }
 
 .chrome-search-hit {
@@ -180,14 +188,16 @@ body.is-network {
   width: 100%;
   text-align: left;
   border: 0;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(24px) saturate(1.45);
   border-radius: 10px;
   padding: 8px 10px;
   gap: 2px;
 }
 
 .chrome-search-hit:hover {
-  background: rgba(28, 27, 24, 0.05);
+  background: rgba(255, 255, 255, 0.62);
 }
 
 .chrome-search-hit strong {
@@ -508,10 +518,10 @@ body.is-network {
     padding: 10px;
     border-radius: 20px;
     border: 1px solid rgba(28, 27, 24, 0.16);
-    background: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.42);
     box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
-    backdrop-filter: blur(18px) saturate(1.45);
-    -webkit-backdrop-filter: blur(18px) saturate(1.45);
+    backdrop-filter: blur(32px) saturate(1.5);
+    -webkit-backdrop-filter: blur(32px) saturate(1.5);
   }
 
   .chrome-actions.is-open {

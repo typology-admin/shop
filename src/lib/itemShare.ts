@@ -63,26 +63,25 @@ export async function exportInstagramPostPng(item: Item): Promise<void> {
   ctx.fillStyle = '#c5c1b6';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const padX = 120;
-  const padTop = 140;
-  const padBottom = 180;
-  const maxW = canvas.width - padX * 2;
-  const maxH = canvas.height - padTop - padBottom;
+  const pad = 100;
+  const captionH = 140;
+  const maxW = canvas.width - pad * 2;
+  const maxH = canvas.height - pad - captionH;
   const scale = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
   const w = img.naturalWidth * scale;
   const h = img.naturalHeight * scale;
-  ctx.drawImage(img, (canvas.width - w) / 2, padTop + (maxH - h) / 2, w, h);
+  ctx.drawImage(img, (canvas.width - w) / 2, pad + (maxH - h) / 2, w, h);
 
   ctx.fillStyle = '#1c1b18';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (item.title.trim()) {
     ctx.font = '500 28px "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
-    ctx.fillText(item.title.trim(), canvas.width / 2, canvas.height - 110, canvas.width - 160);
+    ctx.fillText(item.title.trim(), canvas.width / 2, canvas.height - 88, canvas.width - 160);
   }
   ctx.font = '400 22px "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
   ctx.globalAlpha = 0.55;
-  ctx.fillText('typology network', canvas.width / 2, canvas.height - 64);
+  ctx.fillText('typology network', canvas.width / 2, canvas.height - 48);
   ctx.globalAlpha = 1;
 
   const blob = await new Promise<Blob>((resolve, reject) => {
