@@ -18,8 +18,23 @@ export function r2PublicBaseUrl(): string {
   return (import.meta.env.VITE_R2_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
 }
 
-/** Amazon Associates tracking id. Override with VITE_AMAZON_ASSOCIATE_TAG. */
+/** Amazon Associates tracking id for amazon.com. Override with VITE_AMAZON_ASSOCIATE_TAG. */
 export function amazonAssociateTag(): string {
   const fromEnv = (import.meta.env.VITE_AMAZON_ASSOCIATE_TAG ?? '').trim();
   return fromEnv || 'typologynetwo-20';
+}
+
+/** Amazon Associates tracking id for amazon.de. Override with VITE_AMAZON_ASSOCIATE_TAG_DE. */
+export function amazonAssociateTagDe(): string {
+  const fromEnv = (import.meta.env.VITE_AMAZON_ASSOCIATE_TAG_DE ?? '').trim();
+  return fromEnv || 'typologynetwo-21';
+}
+
+/** Associates ids are per marketplace — a US tag on amazon.de will not credit. */
+export function amazonAssociateTagForHost(hostname: string): string {
+  const host = hostname.replace(/^www\./, '').toLowerCase();
+  if (host === 'amazon.de' || host.endsWith('.amazon.de')) {
+    return amazonAssociateTagDe();
+  }
+  return amazonAssociateTag();
 }

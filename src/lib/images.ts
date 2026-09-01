@@ -1,4 +1,4 @@
-import { amazonAssociateTag, r2PublicBaseUrl } from './env.ts';
+import { amazonAssociateTagForHost, r2PublicBaseUrl } from './env.ts';
 import { localGetBlob } from './localStore.ts';
 
 const blobUrlCache = new Map<string, string>();
@@ -58,12 +58,14 @@ function isAmazonProductHost(hostname: string): boolean {
 }
 
 /** Append or replace `tag=` on full Amazon product URLs. Short links are left alone. */
-export function withAmazonTag(raw: string, tag = amazonAssociateTag()): string {
-  if (!tag || !raw) return raw;
+export function withAmazonTag(raw: string, tag?: string): string {
+  if (!raw) return raw;
   try {
     const url = new URL(raw);
     if (!isAmazonProductHost(url.hostname)) return raw;
-    url.searchParams.set('tag', tag);
+    const chosen = (tag ?? amazonAssociateTagForHost(url.hostname)).trim();
+    if (!chosen) return raw;
+    url.searchParams.set('tag', chosen);
     return url.toString();
   } catch {
     return raw;

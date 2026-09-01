@@ -33,7 +33,8 @@ Copy `.env.example` to `.env` and fill in what you have:
 | `VITE_SUPABASE_URL` | Browser Supabase client |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Browser publishable key (`sb_publishable_…`). `VITE_SUPABASE_ANON_KEY` still works as an alias |
 | `VITE_R2_PUBLIC_BASE_URL` | Optional public R2 base (`https://pub-….r2.dev`). If empty, images are served by `/api/images/:key` |
-| `VITE_AMAZON_ASSOCIATE_TAG` | Amazon Associates id (default `typologynetwo-20`). Stamped onto Amazon product URLs as `?tag=` |
+| `VITE_AMAZON_ASSOCIATE_TAG` | US Associates id (default `typologynetwo-20`). Stamped onto amazon.com product URLs as `?tag=` |
+| `VITE_AMAZON_ASSOCIATE_TAG_DE` | German Associates id (default `typologynetwo-21`). Stamped onto amazon.de product URLs |
 | `SUPABASE_URL` | Pages Function auth check |
 | `SUPABASE_ANON_KEY` | Pages Function auth check |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | Optional. Lets `npm run dev` upload to real R2 instead of `public/dev-uploads/` |
