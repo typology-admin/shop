@@ -1,6 +1,12 @@
 import {
   DEFAULT_DESKTOP_ZOOM,
+  DEFAULT_KNOLL_GAP,
   DEFAULT_MOBILE_ZOOM,
+  DEFAULT_SECTION_HOOKS_HIDE_MS,
+  MAX_KNOLL_GAP,
+  MAX_SECTION_HOOKS_HIDE_MS,
+  MIN_KNOLL_GAP,
+  MIN_SECTION_HOOKS_HIDE_MS,
 } from '../../shared/constants.ts';
 import { clampViewZoom } from './canvas.ts';
 import { hasSupabaseConfig } from './env.ts';
@@ -16,6 +22,8 @@ export type SiteSettings = {
   mobileZoom: number;
   aboutText: string;
   contactEmail: string;
+  sectionHooksHideMs: number;
+  knollGap: number;
 };
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -23,6 +31,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   mobileZoom: DEFAULT_MOBILE_ZOOM,
   aboutText: DEFAULT_ABOUT_TEXT,
   contactEmail: DEFAULT_CONTACT_EMAIL,
+  sectionHooksHideMs: DEFAULT_SECTION_HOOKS_HIDE_MS,
+  knollGap: DEFAULT_KNOLL_GAP,
 };
 
 const LOCAL_KEY = 'typology-site-settings';
@@ -32,11 +42,33 @@ type SettingsRow = {
   mobile_zoom: number | string;
   about_text: string;
   contact_email: string;
+  section_hooks_hide_ms?: number | string | null;
+  knoll_gap?: number | string | null;
 };
 
 function asZoom(value: number | string | null | undefined, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value);
   return clampViewZoom(Number.isFinite(n) ? n : fallback);
+}
+
+export function clampSectionHooksHideMs(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SECTION_HOOKS_HIDE_MS;
+  return Math.min(MAX_SECTION_HOOKS_HIDE_MS, Math.max(MIN_SECTION_HOOKS_HIDE_MS, Math.round(value)));
+}
+
+function asHideMs(value: number | string | null | undefined): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return clampSectionHooksHideMs(Number.isFinite(n) ? n : DEFAULT_SECTION_HOOKS_HIDE_MS);
+}
+
+export function clampKnollGap(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_KNOLL_GAP;
+  return Math.min(MAX_KNOLL_GAP, Math.max(MIN_KNOLL_GAP, Math.round(value)));
+}
+
+function asGap(value: number | string | null | undefined): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return clampKnollGap(Number.isFinite(n) ? n : DEFAULT_KNOLL_GAP);
 }
 
 export function rowToSettings(row: SettingsRow): SiteSettings {
@@ -45,6 +77,8 @@ export function rowToSettings(row: SettingsRow): SiteSettings {
     mobileZoom: asZoom(row.mobile_zoom, DEFAULT_MOBILE_ZOOM),
     aboutText: (row.about_text || DEFAULT_ABOUT_TEXT).trim() || DEFAULT_ABOUT_TEXT,
     contactEmail: (row.contact_email || DEFAULT_CONTACT_EMAIL).trim() || DEFAULT_CONTACT_EMAIL,
+    sectionHooksHideMs: asHideMs(row.section_hooks_hide_ms),
+    knollGap: asGap(row.knoll_gap),
   };
 }
 
@@ -58,6 +92,8 @@ function readLocal(): SiteSettings {
       mobileZoom: asZoom(parsed.mobileZoom ?? DEFAULT_MOBILE_ZOOM, DEFAULT_MOBILE_ZOOM),
       aboutText: parsed.aboutText?.trim() || DEFAULT_ABOUT_TEXT,
       contactEmail: parsed.contactEmail?.trim() || DEFAULT_CONTACT_EMAIL,
+      sectionHooksHideMs: asHideMs(parsed.sectionHooksHideMs),
+      knollGap: asGap(parsed.knollGap),
     };
   } catch {
     return DEFAULT_SITE_SETTINGS;
@@ -79,7 +115,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
   if (!supabase) return readLocal();
   const { data, error } = await supabase
     .from('site_settings')
-    .select('desktop_zoom, mobile_zoom, about_text, contact_email')
+    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
     .eq('id', 'shop')
     .maybeSingle();
   if (error || !data) return DEFAULT_SITE_SETTINGS;
@@ -92,6 +128,8 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
     mobileZoom: clampViewZoom(settings.mobileZoom),
     aboutText: settings.aboutText.trim() || DEFAULT_ABOUT_TEXT,
     contactEmail: settings.contactEmail.trim() || DEFAULT_CONTACT_EMAIL,
+    sectionHooksHideMs: clampSectionHooksHideMs(settings.sectionHooksHideMs),
+    knollGap: clampKnollGap(settings.knollGap),
   };
   if (!hasSupabaseConfig()) {
     writeLocal(next);
@@ -107,9 +145,11 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
       mobile_zoom: next.mobileZoom,
       about_text: next.aboutText,
       contact_email: next.contactEmail,
+      section_hooks_hide_ms: next.sectionHooksHideMs,
+      knoll_gap: next.knollGap,
       updated_at: new Date().toISOString(),
     })
-    .select('desktop_zoom, mobile_zoom, about_text, contact_email')
+    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
     .single();
   if (error) throw error;
   return rowToSettings(data as SettingsRow);

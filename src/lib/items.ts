@@ -8,7 +8,12 @@ import {
   newLocalItem,
 } from './localStore.ts';
 import { getSupabase } from './supabase.ts';
+import { parseTags } from './tags.ts';
 import type { Item, ItemInsert, ItemPatch } from './types.ts';
+
+function asItem(row: Item & { tags?: string[] | null }): Item {
+  return { ...row, tags: parseTags(row.tags) };
+}
 
 export async function fetchItems(): Promise<Item[]> {
   if (!hasSupabaseConfig()) {
@@ -19,33 +24,35 @@ export async function fetchItems(): Promise<Item[]> {
   const { data, error } = await supabase
     .from('items')
     .select(
-      'id, title, affiliate_url, store, image_path, image_width, image_height, x, y, scale, rotation, z_index, created_at',
+      'id, title, affiliate_url, store, image_path, image_width, image_height, x, y, scale, rotation, z_index, tags, created_at',
     )
     .order('z_index', { ascending: true });
   if (error) throw error;
-  return (data ?? []) as Item[];
+  return (data ?? []).map((row) => asItem(row as Item));
 }
 
 export async function createItem(input: ItemInsert): Promise<Item> {
+  const payload = { ...input, tags: parseTags(input.tags) };
   if (!hasSupabaseConfig()) {
-    const item = newLocalItem(input);
+    const item = newLocalItem(payload);
     return localInsertItem(item);
   }
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured.');
-  const { data, error } = await supabase.from('items').insert(input).select().single();
+  const { data, error } = await supabase.from('items').insert(payload).select().single();
   if (error) throw error;
-  return data as Item;
+  return asItem(data as Item);
 }
 
 export async function updateItem(id: string, patch: ItemPatch): Promise<void> {
+  const next = patch.tags !== undefined ? { ...patch, tags: parseTags(patch.tags) } : patch;
   if (!hasSupabaseConfig()) {
-    await localUpdateItem(id, patch);
+    await localUpdateItem(id, next);
     return;
   }
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured.');
-  const { error } = await supabase.from('items').update(patch).eq('id', id);
+  const { error } = await supabase.from('items').update(next).eq('id', id);
   if (error) throw error;
 }
 

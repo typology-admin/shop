@@ -1,4 +1,11 @@
-import { MAX_VIEW_ZOOM, MIN_VIEW_ZOOM } from '../../shared/constants.ts';
+import {
+  MAX_KNOLL_GAP,
+  MAX_SECTION_HOOKS_HIDE_MS,
+  MAX_VIEW_ZOOM,
+  MIN_KNOLL_GAP,
+  MIN_SECTION_HOOKS_HIDE_MS,
+  MIN_VIEW_ZOOM,
+} from '../../shared/constants.ts';
 import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 
 export function ViewZoomSettings() {
@@ -51,6 +58,86 @@ export function ViewZoomSettings() {
           }
           onPointerUp={commit}
           onBlur={commit}
+        />
+      </label>
+      <h2 style={{ fontSize: 18, margin: '22px 0 10px' }}>Section labels</h2>
+      <p className="hint" style={{ margin: '0 0 12px' }}>
+        How long the scene names stay after you stop scrolling. Hovering the rail keeps them open.
+      </p>
+      <label className="range-field">
+        <header>
+          <span>Hide after</span>
+          <span>{(settings.sectionHooksHideMs / 1000).toFixed(1)}s</span>
+        </header>
+        <input
+          type="range"
+          min={MIN_SECTION_HOOKS_HIDE_MS}
+          max={MAX_SECTION_HOOKS_HIDE_MS}
+          step={100}
+          value={settings.sectionHooksHideMs}
+          onChange={(event) =>
+            setSettings({ ...settings, sectionHooksHideMs: Number(event.target.value) })
+          }
+          onPointerUp={(event) => {
+            const next = {
+              ...settings,
+              sectionHooksHideMs: Number((event.currentTarget as HTMLInputElement).value),
+            };
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+          }}
+          onBlur={(event) => {
+            const next = {
+              ...settings,
+              sectionHooksHideMs: Number((event.currentTarget as HTMLInputElement).value),
+            };
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+          }}
+        />
+      </label>
+      <h2 style={{ fontSize: 18, margin: '22px 0 10px' }}>Knoll spacing</h2>
+      <p className="hint" style={{ margin: '0 0 12px' }}>
+        Gap used when auto-arranging a scene around its hook. Collision follows the visible pixels in each PNG.
+      </p>
+      <label className="range-field">
+        <header>
+          <span>Item distance</span>
+          <span>{settings.knollGap}px</span>
+        </header>
+        <input
+          type="range"
+          min={MIN_KNOLL_GAP}
+          max={MAX_KNOLL_GAP}
+          step={4}
+          value={settings.knollGap}
+          onChange={(event) =>
+            setSettings({ ...settings, knollGap: Number(event.target.value) })
+          }
+          onPointerUp={(event) => {
+            const next = {
+              ...settings,
+              knollGap: Number((event.currentTarget as HTMLInputElement).value),
+            };
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+          }}
+          onBlur={(event) => {
+            const next = {
+              ...settings,
+              knollGap: Number((event.currentTarget as HTMLInputElement).value),
+            };
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+          }}
         />
       </label>
     </div>

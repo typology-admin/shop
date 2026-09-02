@@ -11,9 +11,17 @@ type Props = {
   sections: BoardSection[];
   onChange: (sections: BoardSection[]) => void;
   zoom?: number;
+  arrangingId?: string | null;
+  onArrange?: (section: BoardSection) => void;
 };
 
-export function SectionManager({ sections, onChange, zoom = 1 }: Props) {
+export function SectionManager({
+  sections,
+  onChange,
+  zoom = 1,
+  arrangingId = null,
+  onArrange,
+}: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +52,7 @@ export function SectionManager({ sections, onChange, zoom = 1 }: Props) {
     <div className="inspector-block">
       <h2 style={{ fontSize: 18, marginBottom: 10 }}>Sections</h2>
       <p className="hint" style={{ margin: '0 0 12px' }}>
-        Scene hooks on the shop board. Visitors land on a random scene each load: morning, desk,
-        weekend, workshop, boat.
+        Scene hooks on the shop board. Each hook is a gravity center: auto-arrange knolls its objects around it.
       </p>
       {error ? <p className="form-error">{error}</p> : null}
       <form onSubmit={(event) => void onAdd(event)}>
@@ -89,6 +96,16 @@ export function SectionManager({ sections, onChange, zoom = 1 }: Props) {
             >
               Set here
             </button>
+            {onArrange ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={arrangingId === section.id}
+                onClick={() => onArrange(section)}
+              >
+                {arrangingId === section.id ? 'Arranging…' : 'Auto arrange'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn btn-danger"

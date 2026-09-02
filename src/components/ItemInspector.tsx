@@ -1,4 +1,5 @@
 import { MAX_SCALE, MIN_SCALE } from '../../shared/constants.ts';
+import { parseTags, tagsToInput } from '../lib/tags.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 
 type Props = {
@@ -47,6 +48,17 @@ export function ItemInspector({
           value={item.affiliate_url}
           onChange={(event) => onPatch({ affiliate_url: event.target.value }, false)}
           onBlur={(event) => onPatch({ affiliate_url: event.target.value }, true)}
+        />
+      </label>
+
+      <label className="field">
+        <span>Tags</span>
+        <input
+          type="text"
+          value={tagsToInput(item.tags ?? [])}
+          placeholder="leather, boot, desk"
+          onChange={(event) => onPatch({ tags: parseTags(event.target.value) }, false)}
+          onBlur={(event) => onPatch({ tags: parseTags(event.target.value) }, true)}
         />
       </label>
 

@@ -15,6 +15,7 @@ create table if not exists public.items (
   scale double precision not null default 1,
   rotation double precision not null default 0,
   z_index integer not null default 0,
+  tags text[] not null default '{}'::text[],
   created_at timestamptz not null default now()
 );
 
@@ -171,6 +172,8 @@ create table if not exists public.site_settings (
   mobile_zoom numeric(4,2) not null default 1.20,
   about_text text not null default '',
   contact_email text not null default 'info@typology.network',
+  section_hooks_hide_ms integer not null default 1000,
+  knoll_gap integer not null default 48,
   updated_at timestamptz not null default now()
 );
 

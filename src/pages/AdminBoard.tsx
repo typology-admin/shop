@@ -10,7 +10,7 @@ import { ViewZoomSettings } from '../components/ViewZoomSettings.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useItems } from '../hooks/useItems.ts';
-import { useBoardZoom } from '../hooks/useSiteSettings.ts';
+import { useBoardZoom, useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { withAmazonTag } from '../lib/images.ts';
@@ -21,6 +21,15 @@ import {
   updateItem,
   uploadPng,
 } from '../lib/items.ts';
+import {
+  itemsForSection,
+  nearestSection,
+  packNewItem,
+  packSection,
+  sectionGravity,
+} from '../lib/knollLayout.ts';
+import { jumpToSection, type BoardSection } from '../lib/sections.ts';
+import { parseTags } from '../lib/tags.ts';
 import type { ItemPatch } from '../lib/types.ts';
 
 export function AdminBoard() {
@@ -28,10 +37,12 @@ export function AdminBoard() {
   const navigate = useNavigate();
   const { items, setItems, status, error } = useItems();
   const { sections, setSections } = useBoardSections();
+  const { settings } = useSiteSettings();
   const zoom = useBoardZoom();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [arrangingId, setArrangingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
@@ -92,6 +103,10 @@ export function AdminBoard() {
     try {
       const scale = boardScale(window.innerWidth, zoom);
       const center = viewportCenterOnCanvas(scale, window.scrollY, window.innerHeight);
+      const section =
+        sections.find((row) => row.id === draft.sectionId) ??
+        nearestSection(center.y, sections);
+      const gravity = section ? sectionGravity(section) : center;
       const maxZ = items.reduce((max, item) => Math.max(max, item.z_index), 0);
       const id = crypto.randomUUID();
 
@@ -116,19 +131,63 @@ export function AdminBoard() {
         image_path: imagePath,
         image_width: width,
         image_height: height,
-        x: center.x,
-        y: center.y,
+        x: gravity.x,
+        y: gravity.y,
         scale: 1,
         rotation: 0,
         z_index: maxZ + 1,
+        tags: parseTags(draft.tags),
       });
-      setItems((prev) => [...prev, created]);
-      setSelectedId(created.id);
+      let placed = created;
+      if (section) {
+        const pose = await packNewItem({
+          item: created,
+          neighbors: itemsForSection(items, section, sections),
+          section,
+          sections,
+          gap: settings.knollGap,
+          file: draft.file,
+        });
+        placed = { ...created, x: pose.x, y: pose.y, rotation: pose.rotation };
+        await updateItem(placed.id, { x: pose.x, y: pose.y, rotation: pose.rotation });
+        jumpToSection(section, 'smooth');
+      }
+      setItems((prev) => [...prev, placed]);
+      setSelectedId(placed.id);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not add item.');
       throw err;
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleArrange(section: BoardSection) {
+    setArrangingId(section.id);
+    setFormError(null);
+    try {
+      const poses = await packSection({
+        items,
+        section,
+        sections,
+        gap: settings.knollGap,
+      });
+      for (const pose of poses) {
+        const current = items.find((row) => row.id === pose.id);
+        if (!current) continue;
+        if (
+          Math.abs(current.x - pose.x) < 0.5 &&
+          Math.abs(current.y - pose.y) < 0.5 &&
+          Math.abs(current.rotation - pose.rotation) < 0.5
+        ) {
+          continue;
+        }
+        commit(pose.id, { x: pose.x, y: pose.y, rotation: pose.rotation });
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not auto-arrange that scene.');
+    } finally {
+      setArrangingId(null);
     }
   }
 
@@ -201,11 +260,28 @@ export function AdminBoard() {
                   busy={busy}
                   error={formError}
                   accessToken={auth.session?.access_token ?? null}
+                  sections={sections}
+                  defaultSectionId={
+                    nearestSection(
+                      viewportCenterOnCanvas(
+                        boardScale(window.innerWidth, zoom),
+                        window.scrollY,
+                        window.innerHeight,
+                      ).y,
+                      sections,
+                    )?.id ?? null
+                  }
                   onSubmit={handleAdd}
                 />
               </>
             )}
-            <SectionManager sections={sections} onChange={setSections} zoom={zoom} />
+            <SectionManager
+              sections={sections}
+              onChange={setSections}
+              zoom={zoom}
+              arrangingId={arrangingId}
+              onArrange={(section) => void handleArrange(section)}
+            />
             <ViewZoomSettings />
           </aside>
         </>

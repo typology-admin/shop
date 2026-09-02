@@ -11,6 +11,7 @@ export type Item = {
   scale: number;
   rotation: number;
   z_index: number;
+  tags: string[];
   created_at: string;
 };
 
@@ -30,5 +31,6 @@ export type ItemPatch = Partial<
     | 'scale'
     | 'rotation'
     | 'z_index'
+    | 'tags'
   >
 >;

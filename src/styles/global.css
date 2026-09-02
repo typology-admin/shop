@@ -34,6 +34,7 @@ body,
 
 html {
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -173,6 +174,17 @@ a {
   color: var(--ink);
 }
 
+.shop-footer.is-overlay {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 16;
+  background: rgba(197, 193, 182, 0.78);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
 .empty-screen .shop-footer,
 .loading-screen .shop-footer {
   position: absolute;
@@ -299,15 +311,20 @@ a {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
   background: var(--ink);
   color: var(--paper);
   border: 1px solid var(--ink);
-  border-radius: 0;
-  padding: 10px 16px;
-  min-height: 40px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 11px;
+  border-radius: 999px;
+  padding: 0 18px;
+  min-height: 36px;
+  height: 36px;
 }
 
 .btn:hover {
@@ -407,6 +424,17 @@ a {
   gap: 8px;
 }
 
+.admin-bar .btn {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+
 .admin-page {
   min-height: 100vh;
 }
@@ -422,21 +450,49 @@ a {
   border-right: 1px solid var(--ink);
   overflow: auto;
   padding: 16px;
+  font-family: var(--font-ui);
 }
 
 .admin-panel h2 {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 500;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   margin: 0 0 16px;
+}
+
+.admin-panel button {
+  font-family: var(--font-ui);
+  border-radius: 999px;
+}
+
+.admin-panel .text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.admin-panel .text-btn:hover {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .dropzone {
   border: 1px dashed var(--ink);
+  border-radius: 16px;
   padding: 18px 12px;
   text-align: center;
   margin-bottom: 16px;
   background: var(--paper-2);
+  overflow: hidden;
 }
 
 .dropzone.is-over {
@@ -585,7 +641,7 @@ a {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 2.4s ease, visibility 0s linear 2.4s;
+  transition: opacity 0.22s ease, visibility 0s linear 0.22s;
 }
 
 .section-hooks.is-visible {
@@ -656,7 +712,7 @@ a {
 html.chrome-overlay-open .board-scroll,
 html.chrome-overlay-open .scroll-rail,
 html.chrome-overlay-open .shop-footer {
-  filter: blur(20px);
+  filter: blur(28px);
 }
 
 html.item-modal-open .board-scroll,
@@ -671,23 +727,19 @@ html.item-modal-open .shop-footer {
   position: fixed;
   inset: 0;
   z-index: 200;
-  isolation: isolate;
   display: grid;
   place-items: center;
   padding: 28px 16px;
-  background: rgba(197, 193, 182, 0.88);
+  background: rgba(197, 193, 182, 0.22);
 }
 
 .item-modal {
   position: relative;
   width: min(400px, 100%);
+  background: transparent;
   border-radius: 24px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.42);
   border: 1px solid rgba(28, 27, 24, 0.16);
   box-shadow: 0 24px 80px rgba(28, 27, 24, 0.14);
-  backdrop-filter: blur(22px) saturate(1.4);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
 }
 
 .item-modal-close {
@@ -695,10 +747,17 @@ html.item-modal-open .shop-footer {
   top: 10px;
   right: 10px;
   z-index: 2;
+  display: grid;
+  place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
+  aspect-ratio: 1;
+  overflow: hidden;
+  appearance: none;
+  -webkit-appearance: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.4);
   color: var(--ink);
   font-size: 22px;
@@ -712,6 +771,7 @@ html.item-modal-open .shop-footer {
   max-height: min(52vh, 420px);
   padding: 36px 28px 28px;
   background: #c5c1b6;
+  border-radius: 24px 24px 0 0;
 }
 
 .item-modal-stage img {
@@ -727,17 +787,14 @@ html.item-modal-open .shop-footer {
   text-transform: lowercase;
 }
 
-.item-modal-rule {
-  margin: 0;
-  border: 0;
-  height: 1px;
-  background: rgba(28, 27, 24, 0.16);
-}
-
 .item-modal-body {
   display: grid;
   gap: 12px;
   padding: 14px 16px 16px;
+  background: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(28px) saturate(1.4);
+  -webkit-backdrop-filter: blur(28px) saturate(1.4);
+  border-radius: 0 0 24px 24px;
 }
 
 .item-modal-copy p {

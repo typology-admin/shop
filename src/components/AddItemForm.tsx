@@ -11,25 +11,42 @@ export type AddItemDraft = {
   file: File;
   width: number;
   height: number;
+  sectionId: string | null;
+  tags: string;
 };
 
 type Props = {
   busy: boolean;
   error: string | null;
   accessToken?: string | null;
+  sections?: Array<{ id: string; name: string }>;
+  defaultSectionId?: string | null;
   onSubmit: (draft: AddItemDraft) => Promise<void>;
 };
 
-export function AddItemForm({ busy, error, accessToken = null, onSubmit }: Props) {
+export function AddItemForm({
+  busy,
+  error,
+  accessToken = null,
+  sections = [],
+  defaultSectionId = null,
+  onSubmit,
+}: Props) {
   const [title, setTitle] = useState('');
   const [affiliateUrl, setAffiliateUrl] = useState('');
   const [store, setStore] = useState('');
+  const [sectionId, setSectionId] = useState(defaultSectionId ?? '');
+  const [tags, setTags] = useState('');
   const [prepared, setPrepared] = useState<PreparedImage | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const sourceRef = useRef<'upload' | 'url' | null>(null);
   const generation = useRef(0);
+
+  useEffect(() => {
+    if (defaultSectionId) setSectionId(defaultSectionId);
+  }, [defaultSectionId]);
 
   useEffect(() => {
     if (!prepared) {
@@ -124,12 +141,15 @@ export function AddItemForm({ busy, error, accessToken = null, onSubmit }: Props
         file: image.file,
         width: image.width,
         height: image.height,
+        sectionId: sectionId || defaultSectionId || null,
+        tags,
       });
       generation.current += 1;
       sourceRef.current = null;
       setTitle('');
       setAffiliateUrl('');
       setStore('');
+      setTags('');
       setPrepared(null);
     } catch (err) {
       if (err instanceof Error && err.message === 'Cancelled.') return;
@@ -201,11 +221,41 @@ export function AddItemForm({ busy, error, accessToken = null, onSubmit }: Props
         />
       </label>
 
+      {sections.length > 0 ? (
+        <label className="field">
+          <span>Scene hook</span>
+          <select
+            value={sectionId}
+            disabled={locked}
+            onChange={(event) => setSectionId(event.target.value)}
+          >
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.name}
+              </option>
+            ))}
+          </select>
+          <p className="field-hint">Placed around that hook, rotated to fit, without overlapping visible pixels.</p>
+        </label>
+      ) : null}
+
+      <label className="field">
+        <span>Tags</span>
+        <input
+          type="text"
+          placeholder="leather, boot, desk"
+          value={tags}
+          disabled={locked}
+          onChange={(event) => setTags(event.target.value)}
+        />
+        <p className="field-hint">Comma-separated. Used by public search.</p>
+      </label>
+
       {working ? <p className="form-status">{working}</p> : null}
       {message ? <p className="form-error">{message}</p> : null}
 
-      <button className="btn" type="submit" disabled={locked}>
-        {busy ? 'Placing…' : 'Place on board'}
+        <button className="btn" type="submit" disabled={locked}>
+        {busy ? 'Placing…' : 'Place in scene'}
       </button>
     </form>
   );

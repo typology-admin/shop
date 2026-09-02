@@ -1,11 +1,13 @@
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { Board } from '../components/Board.tsx';
 import { ItemModal } from '../components/ItemModal.tsx';
 import { SectionRail } from '../components/SectionRail.tsx';
 import { SiteChrome } from '../components/SiteChrome.tsx';
 import { SiteFooter } from '../components/SiteFooter.tsx';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
+import { useInfiniteWindowScroll } from '../hooks/useInfiniteWindowScroll.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useNetworkItems } from '../hooks/useNetworkItems.ts';
 import { useBoardZoom } from '../hooks/useSiteSettings.ts';
@@ -22,6 +24,9 @@ export function PublicBoard() {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('item');
   const selected = items.find((item) => item.id === selectedId) ?? null;
+  const looping = status === 'ready' && items.length > 0;
+
+  useInfiniteWindowScroll(looping, PUBLIC_BOARD_COPIES);
 
   const openItem = useCallback(
     (item: Item | string) => {
@@ -68,6 +73,7 @@ export function PublicBoard() {
       variant="shop"
       shopItems={items}
       networkItems={networkItems}
+      sections={sections}
       onShopItem={openItem}
     />
   );
@@ -123,7 +129,7 @@ export function PublicBoard() {
           if (id) openItem(id);
         }}
       />
-      <SiteFooter />
+      <SiteFooter overlay />
       {selected ? <ItemModal item={selected} onClose={closeItem} /> : null}
     </>
   );

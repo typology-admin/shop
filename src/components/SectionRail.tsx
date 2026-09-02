@@ -1,29 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
-import { scrollTopForCanvasY } from '../lib/canvas.ts';
+import { useSiteSettings } from '../hooks/useSiteSettings.ts';
+import { loopScrollProgress, scrollFractionForCanvasY, scrollTopForCanvasY } from '../lib/canvas.ts';
 import type { BoardSection } from '../lib/sections.ts';
 
 type Props = {
   sections: BoardSection[];
 };
 
-const HIDE_DELAY_MS = 3200;
-
-function maxScroll() {
-  return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-}
-
 export function SectionRail({ sections }: Props) {
+  const { settings } = useSiteSettings();
+  const hideMs = settings.sectionHooksHideMs;
   const [visible, setVisible] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [scrollMax, setScrollMax] = useState(1);
   const hideTimer = useRef<number>(0);
   const hovering = useRef(false);
 
   useEffect(() => {
     function measure() {
-      const max = maxScroll();
-      setScrollMax(max);
-      setProgress(window.scrollY / max);
+      setProgress(loopScrollProgress());
     }
 
     function reveal() {
@@ -31,7 +25,7 @@ export function SectionRail({ sections }: Props) {
       setVisible(true);
       window.clearTimeout(hideTimer.current);
       if (hovering.current) return;
-      hideTimer.current = window.setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+      hideTimer.current = window.setTimeout(() => setVisible(false), hideMs);
     }
 
     measure();
@@ -47,7 +41,7 @@ export function SectionRail({ sections }: Props) {
       observer.disconnect();
       window.clearTimeout(hideTimer.current);
     };
-  }, []);
+  }, [hideMs]);
 
   const ranked = [...sections].sort((a, b) => a.y - b.y || a.sortOrder - b.sortOrder);
 
@@ -59,7 +53,7 @@ export function SectionRail({ sections }: Props) {
 
   function releaseOpen() {
     hovering.current = false;
-    hideTimer.current = window.setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+    hideTimer.current = window.setTimeout(() => setVisible(false), hideMs);
   }
 
   return (
@@ -75,7 +69,7 @@ export function SectionRail({ sections }: Props) {
       {ranked.length > 0 ? (
         <div className={`section-hooks${visible ? ' is-visible' : ''}`}>
           {ranked.map((section) => {
-            const t = scrollTopForCanvasY(section.y) / scrollMax;
+            const t = scrollFractionForCanvasY(section.y);
             const kit = section.items.map((item) => `${item.emoji} ${item.label}`).join(' · ');
             return (
               <button
@@ -94,7 +88,7 @@ export function SectionRail({ sections }: Props) {
                     behavior: 'smooth',
                   });
                   if (!hovering.current) {
-                    hideTimer.current = window.setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+                    hideTimer.current = window.setTimeout(() => setVisible(false), hideMs);
                   }
                 }}
               >

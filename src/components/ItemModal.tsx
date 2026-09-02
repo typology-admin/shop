@@ -103,7 +103,6 @@ export function ItemModal({ item, onClose }: Props) {
             <div className="item-modal-missing">no image</div>
           )}
         </div>
-        <hr className="item-modal-rule" />
         <div className="item-modal-body">
           {title || store ? (
             <div className="item-modal-copy">

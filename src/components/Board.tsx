@@ -1,5 +1,6 @@
-import { Stage, Layer, Rect } from 'react-konva';
+import { Stage, Layer, Rect, Group } from 'react-konva';
 import { useCallback, useMemo, useState } from 'react';
+import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 import { ProductNode } from './ProductNode.tsx';
@@ -22,6 +23,7 @@ export function Board({
   onCommit,
 }: Props) {
   const fit = useStageFit(items, zoom);
+  const copies = mode === 'public' ? PUBLIC_BOARD_COPIES : 1;
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
 
   const sorted = useMemo(
@@ -37,10 +39,10 @@ export function Board({
   const showProgress = items.length > 0 && loadedCount < items.length;
 
   return (
-    <div className="board-scroll">
+    <div className="board-scroll" data-loop={copies > 1 ? String(copies) : undefined}>
       <Stage
         width={fit.stageWidth}
-        height={fit.stageHeight}
+        height={fit.stageHeight * copies}
         x={fit.stageX}
         scaleX={fit.scale}
         scaleY={fit.scale}
@@ -56,20 +58,24 @@ export function Board({
             x={0}
             y={0}
             width={fit.canvasWidth}
-            height={fit.canvasHeight}
+            height={fit.canvasHeight * copies}
             fill="#c5c1b6"
             listening={false}
           />
-          {sorted.map((item) => (
-            <ProductNode
-              key={item.id}
-              item={item}
-              mode={mode}
-              selected={selectedId === item.id}
-              onSelect={(id) => onSelect?.(id)}
-              onCommit={(id, patch) => onCommit?.(id, patch)}
-              onLoaded={handleLoaded}
-            />
+          {Array.from({ length: copies }, (_, copy) => (
+            <Group key={copy} y={copy * fit.canvasHeight}>
+              {sorted.map((item) => (
+                <ProductNode
+                  key={`${copy}-${item.id}`}
+                  item={item}
+                  mode={mode}
+                  selected={copy === 0 && selectedId === item.id}
+                  onSelect={(id) => onSelect?.(id)}
+                  onCommit={(id, patch) => onCommit?.(id, patch)}
+                  onLoaded={handleLoaded}
+                />
+              ))}
+            </Group>
           ))}
         </Layer>
       </Stage>

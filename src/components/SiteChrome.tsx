@@ -10,8 +10,11 @@ import {
   visitNetworkItem,
   type NetworkItem,
 } from '../lib/network.ts';
+import { nearestSection } from '../lib/knollLayout.ts';
 import { mailtoHref } from '../lib/siteSettings.ts';
+import { itemMatchesQuery } from '../lib/tags.ts';
 import type { Item } from '../lib/types.ts';
+import type { BoardSection } from '../lib/sections.ts';
 
 type Hit =
   | { kind: 'shop'; item: Item }
@@ -21,6 +24,7 @@ type Props = {
   variant: 'shop' | 'network';
   shopItems?: Item[];
   networkItems?: NetworkItem[];
+  sections?: BoardSection[];
   onShopItem?: (item: Item) => void;
 };
 
@@ -49,6 +53,7 @@ export function SiteChrome({
   variant,
   shopItems = [],
   networkItems = [],
+  sections = [],
   onShopItem,
 }: Props) {
   const navigate = useNavigate();
@@ -92,25 +97,55 @@ export function SiteChrome({
     };
   }, []);
 
+  const catalog = useMemo(() => {
+    return shopItems.map((item) => {
+      const scene = nearestSection(item.y, sections);
+      const tags = item.tags ?? [];
+      const hay = `${item.title} ${item.store} ${tags.join(' ')} ${scene?.name ?? ''}`;
+      return { item, scene, tags, hay };
+    });
+  }, [shopItems, sections]);
+
+  const tagIndex = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of catalog) {
+      for (const tag of row.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+      if (row.scene?.name) {
+        const name = row.scene.name.toLowerCase();
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag]) => tag);
+  }, [catalog]);
+
   const hits = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const next: Hit[] = [];
-    for (const item of shopItems) {
-      const hay = `${item.title} ${item.store}`.toLowerCase();
-      if (hay.includes(q)) next.push({ kind: 'shop', item });
+    for (const row of catalog) {
+      if (itemMatchesQuery(row.hay, q)) next.push({ kind: 'shop', item: row.item });
     }
     for (const item of visibleNetworkItems(networkItems)) {
-      const hay = `${item.prefix}${item.suffix} ${item.description}`.toLowerCase();
-      if (hay.includes(q)) next.push({ kind: 'network', item });
+      const hay = `${item.prefix}${item.suffix} ${item.description}`;
+      if (itemMatchesQuery(hay, q)) next.push({ kind: 'network', item });
     }
     return next.slice(0, 12);
-  }, [query, shopItems, networkItems]);
+  }, [query, catalog, networkItems]);
+
+  const suggestedTags = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return tagIndex.slice(0, 16);
+    return tagIndex.filter((tag) => tag.includes(q) && tag !== q).slice(0, 12);
+  }, [query, tagIndex]);
 
   const overlayOpen =
     aboutOpen ||
     (isMobile && menuOpen) ||
-    (searchOpen && query.trim().length > 0 && hits.length > 0);
+    (searchOpen && (hits.length > 0 || suggestedTags.length > 0));
 
   useEffect(() => {
     document.documentElement.classList.toggle('chrome-overlay-open', overlayOpen);
@@ -136,11 +171,27 @@ export function SiteChrome({
           ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={variant === 'shop' ? 'Search shop & network…' : 'Search network…'}
+          placeholder={variant === 'shop' ? 'Search tags, objects…' : 'Search network…'}
         />
       </label>
-      {query.trim() && hits.length > 0 ? (
+      {searchOpen && (suggestedTags.length > 0 || hits.length > 0) ? (
         <div className="chrome-search-results" role="listbox">
+          {suggestedTags.length > 0 ? (
+            <div className="chrome-search-tags">
+              {suggestedTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className="chrome-search-tag"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setQuery(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {hits.length > 0 ? (
           <div className="chrome-search-results-scroll">
             {hits.map((hit) =>
               hit.kind === 'shop' ? (
@@ -152,7 +203,11 @@ export function SiteChrome({
                   onClick={() => pick(hit)}
                 >
                   <strong>{hit.item.title || 'Untitled'}</strong>
-                  <span>{hit.item.store || 'shop'}</span>
+                  <span>
+                    {(hit.item.tags ?? []).length
+                      ? hit.item.tags.join(' · ')
+                      : hit.item.store || 'shop'}
+                  </span>
                 </button>
               ) : (
                 <button
@@ -171,6 +226,7 @@ export function SiteChrome({
               ),
             )}
           </div>
+          ) : null}
         </div>
       ) : null}
     </div>

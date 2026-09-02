@@ -72,11 +72,35 @@ export function viewportCenterOnCanvas(scale: number, scrollY: number, viewportH
   };
 }
 
+export function boardLoopOffset(): number {
+  const board = document.querySelector('.board-scroll');
+  if (!(board instanceof HTMLElement)) return 0;
+  const copies = Number(board.dataset.loop ?? 1);
+  if (!Number.isFinite(copies) || copies < 2) return 0;
+  return board.scrollHeight / copies;
+}
+
 export function scrollTopForCanvasY(y: number, zoom = activeViewZoom): number {
   const scale = boardScale(window.innerWidth, zoom);
-  const target = y * scale - window.innerHeight * 0.28;
+  const loop = boardLoopOffset();
+  const target = y * scale - window.innerHeight * 0.28 + loop;
   const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
   return Math.min(max, Math.max(0, target));
+}
+
+export function scrollFractionForCanvasY(y: number, zoom = activeViewZoom): number {
+  const loop = boardLoopOffset();
+  const one = loop || Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  return Math.min(1, Math.max(0, (scrollTopForCanvasY(y, zoom) - loop) / one));
+}
+
+export function loopScrollProgress(): number {
+  const loop = boardLoopOffset();
+  if (loop <= 0) {
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    return window.scrollY / max;
+  }
+  return Math.min(1, Math.max(0, (window.scrollY - loop) / loop));
 }
 
 export function clampScale(value: number): number {
