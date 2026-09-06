@@ -27,7 +27,7 @@ export function ProductNode({
 }: Props) {
   const nodeRef = useRef<KonvaImageNode>(null);
   const transformerRef = useRef<KonvaTransformerNode>(null);
-  const { image, status } = useProductImage(item.image_path);
+  const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0);
 
   useLayoutEffect(() => {
     onLoaded(item.id, status === 'loaded');

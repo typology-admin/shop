@@ -12,8 +12,9 @@ import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useBoardZoom, useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
+import type { PreparedImage } from '../lib/cutout.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
-import { withAmazonTag } from '../lib/images.ts';
+import { forgetImageUrl, withAmazonTag } from '../lib/images.ts';
 import {
   createItem,
   deleteItem,
@@ -162,6 +163,34 @@ export function AdminBoard() {
     }
   }
 
+  async function handleReplaceImage(prepared: PreparedImage) {
+    if (!selected) return;
+    const item = selected;
+    forgetImageUrl(item.image_path);
+    let imagePath = item.image_path;
+    let width = prepared.width;
+    let height = prepared.height;
+    if (!hasSupabaseConfig()) {
+      imagePath = await saveLocalBlob(item.id, prepared.file);
+    } else {
+      const uploaded = await uploadPng(prepared.file, auth.session?.access_token ?? null);
+      imagePath = uploaded.path;
+      width = uploaded.width;
+      height = uploaded.height;
+    }
+    const patch = {
+      image_path: imagePath,
+      image_width: width,
+      image_height: height,
+    };
+    setItems((prev) =>
+      prev.map((row) =>
+        row.id === item.id ? { ...row, ...patch, image_rev: Date.now() } : row,
+      ),
+    );
+    await updateItem(item.id, patch);
+  }
+
   async function handleArrange(section: BoardSection) {
     setArrangingId(section.id);
     setFormError(null);
@@ -252,6 +281,7 @@ export function AdminBoard() {
                   commit(selected.id, { z_index: minZ - 1 });
                 }}
                 onDelete={() => void handleDelete(selected.id)}
+                onReplaceImage={handleReplaceImage}
               />
             ) : (
               <>

@@ -13,6 +13,7 @@ export type Item = {
   z_index: number;
   tags: string[];
   created_at: string;
+  image_rev?: number;
 };
 
 export type ItemInsert = Omit<Item, 'id' | 'created_at'> & {
@@ -26,6 +27,9 @@ export type ItemPatch = Partial<
     | 'title'
     | 'affiliate_url'
     | 'store'
+    | 'image_path'
+    | 'image_width'
+    | 'image_height'
     | 'x'
     | 'y'
     | 'scale'

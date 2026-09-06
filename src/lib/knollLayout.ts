@@ -4,8 +4,11 @@ import type { BoardSection } from './sections.ts';
 import type { Item } from './types.ts';
 
 const CELL = 8;
-const MARGIN = 96;
+const MARGIN = 64;
 const ROTATIONS = [0, 90, 180, 270];
+const SPIRAL_RINGS = 160;
+/** Extra vertical room around a section so large cutouts still fit. */
+const BAND_PAD = 900;
 
 export type KnollPose = {
   id: string;
@@ -24,6 +27,7 @@ type RotMask = {
   minY: number;
   maxY: number;
   height: number;
+  width: number;
 };
 
 export function nearestSection(y: number, sections: BoardSection[]): BoardSection | null {
@@ -106,6 +110,9 @@ function maskForRotation(footprint: ItemFootprint, scale: number, rotation: numb
     if (y > maxY) maxY = y;
   }
   const unique = uniqueCells(cells);
+  if (!unique.length) {
+    return { rotation, cells: [{ x: 0, y: 0 }], minX: 0, maxX: 0, minY: 0, maxY: 0, height: 1, width: 1 };
+  }
   return {
     rotation,
     cells: unique,
@@ -114,6 +121,7 @@ function maskForRotation(footprint: ItemFootprint, scale: number, rotation: numb
     minY,
     maxY,
     height: maxY - minY + 1,
+    width: maxX - minX + 1,
   };
 }
 
@@ -139,6 +147,7 @@ class Occupancy {
     return y * this.cols + x;
   }
 
+  /** True when every cell is inside the grid and free. */
   fits(ox: number, oy: number, cells: Cell[]): boolean {
     for (const cell of cells) {
       const index = this.index(ox + cell.x, oy + cell.y);
@@ -169,12 +178,12 @@ function* spiral(cx: number, cy: number, maxRings: number): Generator<Cell> {
   }
 }
 
-function buildOccupancy(band: { y0: number; y1: number }): Occupancy {
+function buildOccupancy(band: { y0: number; y1: number }, maskPadCells: number): Occupancy {
   const x0 = Math.floor(MARGIN / CELL);
-  const y0 = Math.floor((band.y0 + MARGIN * 0.25) / CELL);
   const x1 = Math.ceil((CANVAS_WIDTH - MARGIN) / CELL);
-  const y1 = Math.ceil((band.y1 - MARGIN * 0.25) / CELL);
-  return new Occupancy(x0, y0, Math.max(8, x1 - x0), Math.max(8, y1 - y0));
+  const y0 = Math.floor((band.y0 - BAND_PAD) / CELL) - maskPadCells;
+  const y1 = Math.ceil((band.y1 + BAND_PAD) / CELL) + maskPadCells;
+  return new Occupancy(x0, y0, Math.max(16, x1 - x0), Math.max(16, y1 - y0));
 }
 
 function placeOne(
@@ -183,12 +192,13 @@ function placeOne(
   gravity: Cell,
   dilated: RotMask[],
 ): { x: number; y: number; rotation: number } | null {
-  for (const cell of spiral(gravity.x, gravity.y, 56)) {
+  for (const cell of spiral(gravity.x, gravity.y, SPIRAL_RINGS)) {
     let best: RotMask | null = null;
-    for (let i = 0; i < masks.length; i += 1) {
-      const mask = masks[i];
-      if (!mask || !occupancy.fits(cell.x, cell.y, mask.cells)) continue;
-      if (!best || mask.height < best.height) best = mask;
+    for (const mask of masks) {
+      // Collision uses the dilated silhouette so gap is part of the fit test.
+      const probe = dilated.find((row) => row.rotation === mask.rotation) ?? mask;
+      if (!occupancy.fits(cell.x, cell.y, probe.cells)) continue;
+      if (!best || mask.height * mask.width < best.height * best.width) best = mask;
     }
     if (!best) continue;
     const stamp = dilated.find((row) => row.rotation === best.rotation) ?? best;
@@ -196,6 +206,21 @@ function placeOne(
     return { x: cell.x * CELL, y: cell.y * CELL, rotation: best.rotation };
   }
   return null;
+}
+
+function fallbackPose(
+  gravity: { x: number; y: number },
+  index: number,
+  mask: RotMask | undefined,
+): { x: number; y: number; rotation: number } {
+  const pitch = Math.max(48, ((mask?.width ?? 4) + 2) * CELL);
+  const col = index % 5;
+  const row = Math.floor(index / 5);
+  return {
+    x: gravity.x + (col - 2) * pitch,
+    y: gravity.y + row * pitch,
+    rotation: mask?.rotation ?? 0,
+  };
 }
 
 async function masksForItem(
@@ -214,6 +239,14 @@ async function masksForItem(
   return { raw, dilated };
 }
 
+function maxMaskRadius(masks: RotMask[]): number {
+  let max = 4;
+  for (const mask of masks) {
+    max = Math.max(max, Math.abs(mask.minX), Math.abs(mask.maxX), Math.abs(mask.minY), Math.abs(mask.maxY));
+  }
+  return max;
+}
+
 export async function packSection(options: {
   items: Item[];
   section: BoardSection;
@@ -228,19 +261,34 @@ export async function packSection(options: {
 
   const gravity = sectionGravity(options.section);
   const band = sectionBand(options.section, options.sections);
-  const occupancy = buildOccupancy(band);
   const radius = Math.max(1, Math.round(options.gap / CELL / 2));
   const origin = { x: Math.round(gravity.x / CELL), y: Math.round(gravity.y / CELL) };
+
+  const prepared: Array<{ item: Item; raw: RotMask[]; dilated: RotMask[] }> = [];
+  let pad = 8;
+  for (const item of members) {
+    const masks = await masksForItem(item, options.files?.[item.id], radius);
+    pad = Math.max(pad, maxMaskRadius(masks.dilated) + radius + 2);
+    prepared.push({ item, ...masks });
+  }
+
+  const occupancy = buildOccupancy(band, pad);
   const poses: KnollPose[] = [];
 
-  for (const item of members) {
-    const { raw, dilated } = await masksForItem(item, options.files?.[item.id], radius);
-    const placed = placeOne(occupancy, raw, origin, dilated);
-    poses.push(
-      placed
-        ? { id: item.id, ...placed }
-        : { id: item.id, x: gravity.x, y: gravity.y, rotation: 0 },
-    );
+  for (let i = 0; i < prepared.length; i += 1) {
+    const entry = prepared[i];
+    if (!entry) continue;
+    const placed = placeOne(occupancy, entry.raw, origin, entry.dilated);
+    if (placed) {
+      poses.push({ id: entry.item.id, ...placed });
+      continue;
+    }
+    const fallback = fallbackPose(gravity, i, entry.raw[0]);
+    const stamp = entry.dilated[0] ?? entry.raw[0];
+    if (stamp) {
+      occupancy.stamp(Math.round(fallback.x / CELL), Math.round(fallback.y / CELL), stamp.cells);
+    }
+    poses.push({ id: entry.item.id, ...fallback });
   }
 
   return poses;
@@ -256,10 +304,11 @@ export async function packNewItem(options: {
 }): Promise<KnollPose> {
   const gravity = sectionGravity(options.section);
   const band = sectionBand(options.section, options.sections);
-  const occupancy = buildOccupancy(band);
   const radius = Math.max(1, Math.round(options.gap / CELL / 2));
   const origin = { x: Math.round(gravity.x / CELL), y: Math.round(gravity.y / CELL) };
 
+  const neighborMasks: Array<{ x: number; y: number; cells: Cell[] }> = [];
+  let pad = 8;
   for (const neighbor of options.neighbors) {
     const footprint = await footprintForItem(
       neighbor.image_path,
@@ -267,16 +316,26 @@ export async function packNewItem(options: {
       neighbor.image_height,
     );
     const mask = maskForRotation(footprint, neighbor.scale, neighbor.rotation);
-    occupancy.stamp(
-      Math.round(neighbor.x / CELL),
-      Math.round(neighbor.y / CELL),
-      dilate(mask.cells, radius),
-    );
+    const cells = dilate(mask.cells, radius);
+    pad = Math.max(pad, maxMaskRadius([{ ...mask, cells }]) + radius + 2);
+    neighborMasks.push({
+      x: Math.round(neighbor.x / CELL),
+      y: Math.round(neighbor.y / CELL),
+      cells,
+    });
   }
 
   const { raw, dilated } = await masksForItem(options.item, options.file, radius);
+  pad = Math.max(pad, maxMaskRadius(dilated) + radius + 2);
+
+  const occupancy = buildOccupancy(band, pad);
+  for (const neighbor of neighborMasks) {
+    occupancy.stamp(neighbor.x, neighbor.y, neighbor.cells);
+  }
+
   const placed = placeOne(occupancy, raw, origin, dilated);
-  return placed
-    ? { id: options.item.id, ...placed }
-    : { id: options.item.id, x: gravity.x, y: gravity.y, rotation: 0 };
+  if (placed) return { id: options.item.id, ...placed };
+
+  const fallback = fallbackPose(gravity, options.neighbors.length, raw[0]);
+  return { id: options.item.id, ...fallback };
 }

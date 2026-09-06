@@ -1,13 +1,28 @@
 const MAX_EDGE = 2400;
-const BG_TOLERANCE = 46;
-const HOLE_TOLERANCE = 16;
-const FEATHER = 28;
+export const DEFAULT_BG_TOLERANCE = 46;
+export const MIN_BG_TOLERANCE = 18;
+export const MAX_BG_TOLERANCE = 110;
+const HOLE_RATIO = 16 / 46;
+const FEATHER_RATIO = 28 / 46;
 
 export type PreparedImage = {
   file: File;
   width: number;
   height: number;
 };
+
+export type CutoutSession = {
+  name: string;
+  width: number;
+  height: number;
+  pixels: Uint8ClampedArray;
+  sourceAlpha: Uint8ClampedArray;
+  alpha: Uint8ClampedArray;
+  tolerance: number;
+  canAuto: boolean;
+};
+
+export type CutoutBrush = 'keep' | 'cut';
 
 function colorDist(r: number, g: number, b: number, br: number, bg: number, bb: number): number {
   const dr = r - br;
@@ -56,9 +71,24 @@ function hasSeeThrough(data: Uint8ClampedArray): boolean {
   return false;
 }
 
-function removeWhiteBackground(image: ImageData): ImageData {
-  const { width, height, data } = image;
-  const bg = sampleBackground(data, width, height);
+function copyAlpha(data: Uint8ClampedArray, width: number, height: number): Uint8ClampedArray {
+  const alpha = new Uint8ClampedArray(width * height);
+  for (let p = 0; p < alpha.length; p += 1) {
+    alpha[p] = data[p * 4 + 3] ?? 255;
+  }
+  return alpha;
+}
+
+function autoAlpha(
+  pixels: Uint8ClampedArray,
+  width: number,
+  height: number,
+  sourceAlpha: Uint8ClampedArray,
+  tolerance: number,
+): Uint8ClampedArray {
+  const hole = Math.max(8, Math.round(tolerance * HOLE_RATIO));
+  const feather = Math.max(12, Math.round(tolerance * FEATHER_RATIO));
+  const bg = sampleBackground(pixels, width, height);
   const marked = new Uint8Array(width * height);
   const queue = new Int32Array(width * height);
   let head = 0;
@@ -68,8 +98,8 @@ function removeWhiteBackground(image: ImageData): ImageData {
     const idx = y * width + x;
     if (marked[idx]) return;
     const i = idx * 4;
-    const dist = colorDist(data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0, bg.r, bg.g, bg.b);
-    if (dist <= BG_TOLERANCE) {
+    const dist = colorDist(pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0, bg.r, bg.g, bg.b);
+    if (dist <= tolerance) {
       marked[idx] = 1;
       queue[tail++] = idx;
     }
@@ -99,15 +129,15 @@ function removeWhiteBackground(image: ImageData): ImageData {
     if (marked[i]) bgCount += 1;
   }
   if (bgCount / marked.length < 0.02) {
-    for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
-      const dist = colorDist(data[i] ?? 0, data[i + 1] ?? 0, data[i + 2] ?? 0, bg.r, bg.g, bg.b);
-      if (dist <= HOLE_TOLERANCE) marked[p] = 1;
+    for (let i = 0, p = 0; i < pixels.length; i += 4, p += 1) {
+      const dist = colorDist(pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0, bg.r, bg.g, bg.b);
+      if (dist <= hole) marked[p] = 1;
     }
   }
 
-  const next = new Uint8ClampedArray(data);
+  const alpha = new Uint8ClampedArray(width * height);
   for (let p = 0; p < marked.length; p += 1) {
-    if (marked[p]) next[p * 4 + 3] = 0;
+    alpha[p] = marked[p] ? 0 : (sourceAlpha[p] ?? 255);
   }
 
   for (let y = 0; y < height; y += 1) {
@@ -121,21 +151,82 @@ function removeWhiteBackground(image: ImageData): ImageData {
         (y + 1 < height && marked[p + width]);
       if (!nearBg) continue;
       const i = p * 4;
-      const dist = colorDist(next[i] ?? 0, next[i + 1] ?? 0, next[i + 2] ?? 0, bg.r, bg.g, bg.b);
-      if (dist >= FEATHER) continue;
-      next[i + 3] = Math.max(0, Math.min(255, Math.round((255 * dist) / FEATHER)));
+      const dist = colorDist(pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0, bg.r, bg.g, bg.b);
+      if (dist >= feather) continue;
+      const source = sourceAlpha[p] ?? 255;
+      alpha[p] = Math.max(0, Math.min(255, Math.round((source * dist) / feather)));
     }
   }
 
   let remaining = 0;
-  for (let i = 3; i < next.length; i += 4) {
-    if ((next[i] ?? 0) > 16) remaining += 1;
+  for (let p = 0; p < alpha.length; p += 1) {
+    if ((alpha[p] ?? 0) > 16) remaining += 1;
   }
   if (remaining < 24) {
     throw new Error('Could not cut the object from a light background. Try a product photo on white.');
   }
 
-  return new ImageData(next, width, height);
+  return alpha;
+}
+
+export function compositeCutout(session: CutoutSession): ImageData {
+  const data = new Uint8ClampedArray(session.pixels);
+  for (let p = 0; p < session.alpha.length; p += 1) {
+    data[p * 4 + 3] = session.alpha[p] ?? 0;
+  }
+  return new ImageData(data, session.width, session.height);
+}
+
+export function applyAutoCutout(session: CutoutSession, tolerance = session.tolerance): void {
+  session.tolerance = Math.max(MIN_BG_TOLERANCE, Math.min(MAX_BG_TOLERANCE, tolerance));
+  session.alpha = autoAlpha(
+    session.pixels,
+    session.width,
+    session.height,
+    session.sourceAlpha,
+    session.tolerance,
+  );
+}
+
+export function resetCutout(session: CutoutSession): void {
+  if (session.canAuto) applyAutoCutout(session, session.tolerance);
+  else session.alpha = session.sourceAlpha.slice();
+}
+
+export function paintCutout(
+  session: CutoutSession,
+  cx: number,
+  cy: number,
+  radius: number,
+  mode: CutoutBrush,
+): { x: number; y: number; w: number; h: number } {
+  const { width, height, alpha } = session;
+  const rad = Math.max(1, radius);
+  const minX = Math.max(0, Math.floor(cx - rad));
+  const maxX = Math.min(width - 1, Math.ceil(cx + rad));
+  const minY = Math.max(0, Math.floor(cy - rad));
+  const maxY = Math.min(height - 1, Math.ceil(cy + rad));
+  const r2 = rad * rad;
+
+  for (let y = minY; y <= maxY; y += 1) {
+    const dy = y + 0.5 - cy;
+    for (let x = minX; x <= maxX; x += 1) {
+      const dx = x + 0.5 - cx;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      const t = 1 - Math.sqrt(d2) / rad;
+      const falloff = t * t;
+      const p = y * width + x;
+      const current = alpha[p] ?? 0;
+      if (mode === 'cut') {
+        alpha[p] = Math.round(current * (1 - falloff));
+      } else {
+        alpha[p] = Math.round(current + (255 - current) * falloff);
+      }
+    }
+  }
+
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
 function cropToAlpha(image: ImageData): ImageData {
@@ -206,17 +297,36 @@ function encodePng(image: ImageData): Promise<Blob> {
   });
 }
 
-export async function prepareItemImage(source: Blob, name = 'item.png'): Promise<PreparedImage> {
-  let image = await decodeImage(source);
-  if (!hasSeeThrough(image.data)) {
-    image = removeWhiteBackground(image);
-  }
-  image = cropToAlpha(image);
+export async function beginCutout(source: Blob, name = 'item.png'): Promise<CutoutSession> {
+  const image = await decodeImage(source);
+  const sourceAlpha = copyAlpha(image.data, image.width, image.height);
+  const canAuto = !hasSeeThrough(image.data);
+  const session: CutoutSession = {
+    name,
+    width: image.width,
+    height: image.height,
+    pixels: new Uint8ClampedArray(image.data),
+    sourceAlpha,
+    alpha: sourceAlpha.slice(),
+    tolerance: DEFAULT_BG_TOLERANCE,
+    canAuto,
+  };
+  if (canAuto) applyAutoCutout(session, DEFAULT_BG_TOLERANCE);
+  return session;
+}
+
+export async function finalizeCutout(session: CutoutSession): Promise<PreparedImage> {
+  const image = cropToAlpha(compositeCutout(session));
   const blob = await encodePng(image);
-  const fileName = name.replace(/\.[a-z0-9]+$/i, '') + '.png';
+  const fileName = session.name.replace(/\.[a-z0-9]+$/i, '') + '.png';
   return {
     file: new File([blob], fileName, { type: 'image/png' }),
     width: image.width,
     height: image.height,
   };
+}
+
+export async function prepareItemImage(source: Blob, name = 'item.png'): Promise<PreparedImage> {
+  const session = await beginCutout(source, name);
+  return finalizeCutout(session);
 }

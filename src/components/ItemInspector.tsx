@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { MAX_SCALE, MIN_SCALE } from '../../shared/constants.ts';
+import { beginCutout, finalizeCutout, type CutoutSession, type PreparedImage } from '../lib/cutout.ts';
+import { fetchImageBlob } from '../lib/images.ts';
 import { parseTags, tagsToInput } from '../lib/tags.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
+import { CutoutEditor } from './CutoutEditor.tsx';
 
 type Props = {
   item: Item;
@@ -8,6 +12,7 @@ type Props = {
   onBringToFront: () => void;
   onSendToBack: () => void;
   onDelete: () => void;
+  onReplaceImage: (prepared: PreparedImage) => Promise<void>;
 };
 
 export function ItemInspector({
@@ -16,7 +21,40 @@ export function ItemInspector({
   onBringToFront,
   onSendToBack,
   onDelete,
+  onReplaceImage,
 }: Props) {
+  const [session, setSession] = useState<CutoutSession | null>(null);
+  const [working, setWorking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function openCutout() {
+    setError(null);
+    setWorking('Loading photo…');
+    try {
+      const blob = await fetchImageBlob(item.image_path);
+      const next = await beginCutout(blob, 'item.png');
+      setSession(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open that cutout.');
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  async function saveCutout() {
+    if (!session) return;
+    setWorking('Saving cutout…');
+    try {
+      const prepared = await finalizeCutout(session);
+      await onReplaceImage(prepared);
+      setSession(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the cutout.');
+    } finally {
+      setWorking(null);
+    }
+  }
+
   return (
     <div className="inspector-block">
       <h2>{item.title || 'Untitled object'}</h2>
@@ -117,6 +155,9 @@ export function ItemInspector({
       </label>
 
       <div className="btn-row">
+        <button type="button" className="btn btn-ghost" onClick={() => void openCutout()} disabled={Boolean(working)}>
+          {working ?? 'Edit cutout'}
+        </button>
         <button type="button" className="btn btn-ghost" onClick={onBringToFront}>
           Bring front
         </button>
@@ -127,6 +168,16 @@ export function ItemInspector({
           Delete
         </button>
       </div>
+      {error ? <p className="form-error">{error}</p> : null}
+
+      {session ? (
+        <CutoutEditor
+          session={session}
+          doneLabel="Save cutout"
+          onDone={() => void saveCutout()}
+          onCancel={() => setSession(null)}
+        />
+      ) : null}
     </div>
   );
 }

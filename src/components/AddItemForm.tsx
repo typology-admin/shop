@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { prepareItemImage, type PreparedImage } from '../lib/cutout.ts';
+import { beginCutout, finalizeCutout, type CutoutSession, type PreparedImage } from '../lib/cutout.ts';
 import { inferStore } from '../lib/images.ts';
 import { fetchProductHero } from '../lib/productImage.ts';
+import { CutoutEditor } from './CutoutEditor.tsx';
 import { PngDropzone } from './PngDropzone.tsx';
 
 export type AddItemDraft = {
@@ -37,8 +38,10 @@ export function AddItemForm({
   const [store, setStore] = useState('');
   const [sectionId, setSectionId] = useState(defaultSectionId ?? '');
   const [tags, setTags] = useState('');
+  const [session, setSession] = useState<CutoutSession | null>(null);
   const [prepared, setPrepared] = useState<PreparedImage | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const sourceRef = useRef<'upload' | 'url' | null>(null);
@@ -61,7 +64,15 @@ export function AddItemForm({
   function clearImage() {
     generation.current += 1;
     sourceRef.current = null;
+    setSession(null);
     setPrepared(null);
+    setEditorOpen(false);
+  }
+
+  async function adoptSession(next: CutoutSession) {
+    const image = await finalizeCutout(next);
+    setSession(next);
+    setPrepared(image);
   }
 
   async function handleFile(next: File) {
@@ -69,13 +80,14 @@ export function AddItemForm({
     setLocalError(null);
     setWorking('Cutting background…');
     try {
-      const image = await prepareItemImage(next, next.name);
+      const cutout = await beginCutout(next, next.name);
       if (id !== generation.current) return;
       sourceRef.current = 'upload';
-      setPrepared(image);
+      await adoptSession(cutout);
     } catch (err) {
       if (id !== generation.current) return;
       sourceRef.current = null;
+      setSession(null);
       setPrepared(null);
       setLocalError(err instanceof Error ? err.message : 'Could not read that photo.');
     } finally {
@@ -95,9 +107,12 @@ export function AddItemForm({
       const hero = await fetchProductHero(url, accessToken);
       if (id !== generation.current) throw new Error('Cancelled.');
       setWorking('Cutting background…');
-      const image = await prepareItemImage(hero.blob, 'product.png');
+      const cutout = await beginCutout(hero.blob, 'product.png');
       if (id !== generation.current) throw new Error('Cancelled.');
       sourceRef.current = 'url';
+      const image = await finalizeCutout(cutout);
+      if (id !== generation.current) throw new Error('Cancelled.');
+      setSession(cutout);
       setPrepared(image);
       if (hero.title) {
         setTitle((current) => current.trim() || hero.title || '');
@@ -124,6 +139,22 @@ export function AddItemForm({
     }
   }
 
+  async function finishEditing() {
+    if (!session) {
+      setEditorOpen(false);
+      return;
+    }
+    setWorking('Updating cutout…');
+    try {
+      await adoptSession(session);
+      setEditorOpen(false);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'Could not update the cutout.');
+    } finally {
+      setWorking(null);
+    }
+  }
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setLocalError(null);
@@ -132,8 +163,9 @@ export function AddItemForm({
       return;
     }
     try {
-      const image =
-        prepared ?? (await loadFromUrl(affiliateUrl.trim(), true));
+      const image = session
+        ? await finalizeCutout(session)
+        : prepared ?? (await loadFromUrl(affiliateUrl.trim(), true));
       await onSubmit({
         title: title.trim(),
         affiliateUrl: affiliateUrl.trim(),
@@ -150,6 +182,7 @@ export function AddItemForm({
       setAffiliateUrl('');
       setStore('');
       setTags('');
+      setSession(null);
       setPrepared(null);
     } catch (err) {
       if (err instanceof Error && err.message === 'Cancelled.') return;
@@ -169,14 +202,31 @@ export function AddItemForm({
       />
       {previewUrl && prepared ? (
         <div className="cutout-preview">
-          <img src={previewUrl} alt="Cutout preview" />
+          <button
+            type="button"
+            className="cutout-preview-open"
+            onClick={() => setEditorOpen(true)}
+            disabled={locked || !session}
+          >
+            <img src={previewUrl} alt="Cutout preview" />
+          </button>
           <p className="file-chip">
             <span>
               {prepared.width}×{prepared.height}
             </span>
-            <button type="button" className="text-btn" onClick={clearImage} disabled={locked}>
-              Remove
-            </button>
+            <span className="file-chip-actions">
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => setEditorOpen(true)}
+                disabled={locked || !session}
+              >
+                Edit cutout
+              </button>
+              <button type="button" className="text-btn" onClick={clearImage} disabled={locked}>
+                Remove
+              </button>
+            </span>
           </p>
         </div>
       ) : null}
@@ -254,9 +304,17 @@ export function AddItemForm({
       {working ? <p className="form-status">{working}</p> : null}
       {message ? <p className="form-error">{message}</p> : null}
 
-        <button className="btn" type="submit" disabled={locked}>
+      <button className="btn" type="submit" disabled={locked}>
         {busy ? 'Placing…' : 'Place in scene'}
       </button>
+
+      {editorOpen && session ? (
+        <CutoutEditor
+          session={session}
+          onDone={() => void finishEditing()}
+          onCancel={() => setEditorOpen(false)}
+        />
+      ) : null}
     </form>
   );
 }

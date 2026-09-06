@@ -148,6 +148,19 @@ a {
   letter-spacing: 0.02em;
 }
 
+.shop-footer-handle {
+  display: none;
+}
+
+.shop-footer-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 24px;
+  flex: 1;
+}
+
 .shop-footer-mark {
   text-transform: lowercase;
 }
@@ -520,7 +533,18 @@ a {
 .cutout-preview {
   margin: -8px 0 16px;
   padding: 12px;
+  border-radius: 16px;
+  overflow: hidden;
   background: repeating-conic-gradient(#d8d4c8 0% 25%, #eeeae0 0% 50%) 0 0 / 16px 16px;
+}
+
+.cutout-preview-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .cutout-preview img {
@@ -529,12 +553,18 @@ a {
   max-height: 180px;
   margin: 0 auto 8px;
   object-fit: contain;
+  pointer-events: none;
 }
 
 .cutout-preview .file-chip {
   margin: 0;
   background: var(--paper);
   padding: 6px 8px;
+}
+
+.file-chip-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .field-hint {
@@ -686,6 +716,75 @@ a {
 }
 
 @media (max-width: 720px) {
+  .shop-footer.is-sheet {
+    --footer-handle: 28px;
+    --footer-drag: 0px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 16;
+    display: grid;
+    justify-content: stretch;
+    gap: 0;
+    padding: 0 20px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    transform: translateY(calc(100% - var(--footer-handle) + var(--footer-drag)));
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease;
+    pointer-events: none;
+  }
+
+  .shop-footer.is-sheet.is-open {
+    background: rgba(197, 193, 182, 0.78);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    transform: translateY(var(--footer-drag));
+    pointer-events: auto;
+  }
+
+  .shop-footer.is-sheet.is-dragging {
+    transition: none;
+  }
+
+  .shop-footer-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: var(--footer-handle);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .shop-footer-handle::after {
+    content: "";
+    width: 42px;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--ink);
+    opacity: 0.55;
+  }
+
+  .shop-footer.is-sheet.is-open .shop-footer-handle::after {
+    opacity: 0.35;
+  }
+
+  .shop-footer-panel {
+    width: 100%;
+    padding: 4px 0 12px;
+  }
+
+  .image-progress {
+    bottom: 36px;
+  }
+
   .admin-panel {
     width: 100%;
     max-height: 55vh;
@@ -721,6 +820,79 @@ html.item-modal-open .scroll-rail,
 html.item-modal-open .shop-footer {
   filter: blur(40px);
   pointer-events: none;
+}
+
+html.cutout-editor-open .admin-page {
+  pointer-events: none;
+}
+
+.cutout-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  padding: 20px 16px;
+  background: rgba(197, 193, 182, 0.42);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  pointer-events: auto;
+}
+
+.cutout-editor {
+  width: min(720px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
+  background: var(--paper);
+  box-shadow: 0 24px 80px rgba(28, 27, 24, 0.16);
+  font-family: var(--font-ui);
+}
+
+.cutout-editor-head h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-transform: lowercase;
+}
+
+.cutout-editor-head p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.cutout-editor-canvas {
+  width: 100%;
+  height: min(58vh, 520px);
+  border-radius: 16px;
+  touch-action: none;
+  display: block;
+}
+
+.cutout-editor-canvas.is-keep {
+  cursor: copy;
+}
+
+.cutout-editor-canvas.is-cut {
+  cursor: cell;
+}
+
+.cutout-editor-tools {
+  display: grid;
+  gap: 10px;
+}
+
+.cutout-editor .range-field {
+  margin-bottom: 0;
+}
+
+.cutout-editor-tools > .btn-row:last-child {
+  justify-content: flex-end;
 }
 
 .item-modal-backdrop {

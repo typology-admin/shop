@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { resolveImageUrl } from '../lib/images.ts';
 
-export function useProductImage(imagePath: string) {
+export function useProductImage(imagePath: string, revision = 0) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
 
@@ -41,7 +41,7 @@ export function useProductImage(imagePath: string) {
         element.onerror = null;
       }
     };
-  }, [imagePath]);
+  }, [imagePath, revision]);
 
   return { image, status };
 }
