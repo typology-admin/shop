@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MOBILE_BREAKPOINT } from '../../shared/constants.ts';
+import { useAuth } from '../hooks/useAuth.ts';
 import { useMediaQuery } from '../hooks/useMediaQuery.ts';
 import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { openAffiliate } from '../lib/images.ts';
@@ -57,6 +58,7 @@ export function SiteChrome({
   onShopItem,
 }: Props) {
   const navigate = useNavigate();
+  const auth = useAuth();
   const { settings } = useSiteSettings();
   const isMobile = useMediaQuery(`(max-width: ${MOBILE_BREAKPOINT}px)`);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -306,6 +308,15 @@ export function SiteChrome({
           </Link>
         ) : null}
         {aboutControl}
+        {auth.session ? (
+          <Link className="chrome-pill" to="/me">
+            {auth.profile?.username ? `@${auth.profile.username}` : 'account'}
+          </Link>
+        ) : !auth.isLocal ? (
+          <Link className="chrome-pill" to="/login">
+            sign in
+          </Link>
+        ) : null}
       </div>
     </div>
   );

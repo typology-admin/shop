@@ -1,14 +1,18 @@
 import { useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { RequireAdmin } from './auth/RequireAdmin.tsx'
+import { RequireAuth } from './auth/RequireAuth.tsx'
 import { AdminBoard } from './pages/AdminBoard.tsx'
 import { AdminContact } from './pages/AdminContact.tsx'
 import { AdminLogin } from './pages/AdminLogin.tsx'
 import { AdminNetwork } from './pages/AdminNetwork.tsx'
 import { AdminAffiliates } from './pages/AdminAffiliates.tsx'
+import { Login } from './pages/Login.tsx'
+import { Me } from './pages/Me.tsx'
 import { NetworkHome } from './pages/NetworkHome.tsx'
 import { PublicBoard } from './pages/PublicBoard.tsx'
 import { SiteContentPage } from './pages/SiteContentPage.tsx'
+import { UserProfile } from './pages/UserProfile.tsx'
 
 export default function App() {
   const location = useLocation()
@@ -24,6 +28,16 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<PublicBoard />} />
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/me"
+        element={
+          <RequireAuth>
+            <Me />
+          </RequireAuth>
+        }
+      />
+      <Route path="/u/:username" element={<UserProfile />} />
       <Route path="/network" element={<NetworkHome />} />
       <Route path="/network/about" element={<SiteContentPage slug="about" />} />
       <Route path="/network/privacy" element={<SiteContentPage slug="privacy" />} />

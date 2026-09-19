@@ -5,6 +5,7 @@ A poster-style board of affiliate products, arranged like a knolling photograph.
 The working name was **Flatlay**. Knoll is shorter and names the layout technique.
 
 - Public board: `/`
+- User accounts: `/login`, `/me`, `/u/:username`
 - Admin (password-protected): `/admin` and `/admin/login`
 
 The composition lives in a fixed canvas space (2400×3600, growing downward as items are placed lower). The stage is scaled to the viewport **width**, then you scroll vertically — the same idea as shrinking a poster, not reflowing a grid. If you keep stacking items down the board, scrolling continues.
@@ -62,6 +63,24 @@ set raw_app_meta_data =
   coalesce(raw_app_meta_data, '{}'::jsonb) || '{"role": "admin"}'::jsonb
 where email = 'you@example.com';
 ```
+
+### User accounts (magic link + Google)
+
+Consumer auth is separate from `/admin/login`. In the Supabase dashboard:
+
+1. Authentication → Providers → enable **Email** with magic links (OTP).
+2. Enable **Google** and add the client id/secret from Google Cloud.
+3. Authentication → URL configuration → add these redirect URLs:
+
+```
+http://127.0.0.1:5173/login
+http://localhost:5173/login
+https://typology.network/login
+```
+
+Also set the site URL to the production origin.
+
+Usernames live on the existing `public.profiles` row (`id = auth.users.id`). Shipping fields stay private. Public pages read `public.profile_handles` only (`username`, `display_name`). SQL is in `supabase/migrations/`.
 
 ## Cloudflare R2
 

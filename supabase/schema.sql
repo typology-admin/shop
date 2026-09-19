@@ -207,3 +207,8 @@ insert into public.site_settings (id)
 values ('shop')
 on conflict (id) do nothing;
 
+-- User accounts (shop + network share public.profiles).
+-- Username and public handles: supabase/migrations/20260919193000_profile_usernames.sql
+-- and supabase/migrations/20260919194500_profile_handles.sql
+
+

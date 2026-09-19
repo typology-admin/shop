@@ -3,6 +3,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { isAdmin } from '../lib/auth.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { localSessionEmail, localSignIn, localSignOut } from '../lib/localStore.ts';
+import {
+  authRedirectUrl,
+  claimUsername as saveUsername,
+  fetchOwnProfile,
+  type Profile,
+} from '../lib/profile.ts';
 import { getSupabase } from '../lib/supabase.ts';
 
 export type AuthState = {
@@ -12,8 +18,13 @@ export type AuthState = {
   email: string | null;
   isLocal: boolean;
   admin: boolean;
+  profile: Profile | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithMagicLink: (email: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  claimUsername: (username: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -36,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [admin, setAdmin] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const isLocal = !hasSupabaseConfig();
 
   useEffect(() => {
@@ -44,32 +56,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const localEmail = localSessionEmail();
       setEmail(localEmail);
       setAdmin(Boolean(localEmail));
+      setProfile(null);
       setReady(true);
       return;
     }
 
     let cancelled = false;
 
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (cancelled) return;
-      const next = data.session;
+    async function applySession(next: Session | null) {
       const nextUser = next?.user ?? null;
       setSession(next);
       setUser(nextUser);
       setEmail(nextUser?.email ?? null);
-      setAdmin(await resolveAdmin(nextUser));
+      const [allowed, nextProfile] = await Promise.all([
+        resolveAdmin(nextUser),
+        nextUser ? fetchOwnProfile(nextUser.id).catch(() => null) : Promise.resolve(null),
+      ]);
+      if (cancelled) return;
+      setAdmin(allowed);
+      setProfile(nextProfile);
       setReady(true);
+    }
+
+    void supabase.auth.getSession().then(async ({ data }) => {
+      if (cancelled) return;
+      await applySession(data.session);
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
-      const nextUser = next?.user ?? null;
-      setSession(next);
-      setUser(nextUser);
-      setEmail(nextUser?.email ?? null);
-      void resolveAdmin(nextUser).then((allowed) => {
-        if (!cancelled) setAdmin(allowed);
-      });
-      setReady(true);
+      void applySession(next);
     });
 
     return () => {
@@ -94,20 +109,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const signInWithMagicLink = useCallback(async (nextEmail: string) => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      throw new Error('Accounts need Supabase credentials.');
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      email: nextEmail,
+      options: { emailRedirectTo: authRedirectUrl() },
+    });
+    if (error) throw error;
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      throw new Error('Accounts need Supabase credentials.');
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: authRedirectUrl() },
+    });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) {
       localSignOut();
       setEmail(null);
       setAdmin(false);
+      setProfile(null);
       return;
     }
     await supabase.auth.signOut();
+    setProfile(null);
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    setProfile(await fetchOwnProfile(user.id));
+  }, [user]);
+
+  const claimUsername = useCallback(
+    async (username: string) => {
+      if (!user) throw new Error('Sign in first.');
+      setProfile(await saveUsername(user.id, username));
+    },
+    [user],
+  );
+
   const value = useMemo<AuthState>(
-    () => ({ ready, user, session, email, isLocal, admin, signIn, signOut }),
-    [ready, user, session, email, isLocal, admin, signIn, signOut],
+    () => ({
+      ready,
+      user,
+      session,
+      email,
+      isLocal,
+      admin,
+      profile,
+      signIn,
+      signInWithMagicLink,
+      signInWithGoogle,
+      signOut,
+      refreshProfile,
+      claimUsername,
+    }),
+    [
+      ready,
+      user,
+      session,
+      email,
+      isLocal,
+      admin,
+      profile,
+      signIn,
+      signInWithMagicLink,
+      signInWithGoogle,
+      signOut,
+      refreshProfile,
+      claimUsername,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
