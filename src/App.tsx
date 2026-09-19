@@ -12,6 +12,7 @@ import { Me } from './pages/Me.tsx'
 import { NetworkHome } from './pages/NetworkHome.tsx'
 import { PublicBoard } from './pages/PublicBoard.tsx'
 import { SiteContentPage } from './pages/SiteContentPage.tsx'
+import { UserBoardPage } from './pages/UserBoard.tsx'
 import { UserProfile } from './pages/UserProfile.tsx'
 
 export default function App() {
@@ -38,6 +39,8 @@ export default function App() {
         }
       />
       <Route path="/u/:username" element={<UserProfile />} />
+      <Route path="/u/:username/:slug" element={<UserBoardPage />} />
+      <Route path="/s/:token" element={<UserBoardPage />} />
       <Route path="/network" element={<NetworkHome />} />
       <Route path="/network/about" element={<SiteContentPage slug="about" />} />
       <Route path="/network/privacy" element={<SiteContentPage slug="privacy" />} />

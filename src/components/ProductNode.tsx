@@ -15,6 +15,9 @@ type Props = {
   onSelect: (id: string) => void;
   onCommit: (id: string, patch: ItemPatch) => void;
   onLoaded: (id: string, ok: boolean) => void;
+  onDragStartItem?: (id: string) => void;
+  onDragMoveItem?: (id: string, x: number, y: number) => void;
+  onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
 export function ProductNode({
@@ -24,6 +27,9 @@ export function ProductNode({
   onSelect,
   onCommit,
   onLoaded,
+  onDragStartItem,
+  onDragMoveItem,
+  onDragEndItem,
 }: Props) {
   const nodeRef = useRef<KonvaImageNode>(null);
   const transformerRef = useRef<KonvaTransformerNode>(null);
@@ -92,13 +98,20 @@ export function ProductNode({
         onDragStart={(event) => {
           event.cancelBubble = true;
           onSelect(item.id);
+          onDragStartItem?.(item.id);
           const container = event.target.getStage()?.container();
           if (container) container.style.cursor = 'grabbing';
+        }}
+        onDragMove={(event) => {
+          onDragMoveItem?.(item.id, event.target.x(), event.target.y());
         }}
         onDragEnd={(event) => {
           const container = event.target.getStage()?.container();
           if (container) container.style.cursor = admin ? 'grab' : 'default';
-          onCommit(item.id, { x: event.target.x(), y: event.target.y() });
+          const x = event.target.x();
+          const y = event.target.y();
+          if (onDragEndItem) onDragEndItem(item.id, x, y);
+          else onCommit(item.id, { x, y });
         }}
         onTransformEnd={() => {
           const node = nodeRef.current;

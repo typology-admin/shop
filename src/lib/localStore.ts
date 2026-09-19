@@ -33,7 +33,9 @@ export async function localListItems(): Promise<Item[]> {
   const db = await openDb();
   const tx = db.transaction(ITEMS, 'readonly');
   const rows = await reqAs<Item[]>(tx.objectStore(ITEMS).getAll());
-  return rows.sort((a, b) => a.z_index - b.z_index).map((row) => ({ ...row, tags: row.tags ?? [] }));
+  return rows
+    .sort((a, b) => a.z_index - b.z_index)
+    .map((row) => ({ ...row, tags: row.tags ?? [], section_id: row.section_id ?? null }));
 }
 
 export async function localInsertItem(item: Item): Promise<Item> {
@@ -87,6 +89,7 @@ export function newLocalItem(partial: ItemInsert): Item {
     rotation: partial.rotation,
     z_index: partial.z_index,
     tags: partial.tags ?? [],
+    section_id: partial.section_id ?? null,
     created_at: partial.created_at ?? new Date().toISOString(),
   };
 }

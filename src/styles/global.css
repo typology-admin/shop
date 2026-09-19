@@ -10,6 +10,7 @@
   --focus: #1c1b18;
   --bar-h: 48px;
   --panel-w: 280px;
+  --panel-rail-w: 48px;
   --font-ui: "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
@@ -409,7 +410,6 @@ a {
   gap: 12px;
   padding: 8px 12px;
   background: rgba(239, 236, 227, 0.92);
-  border-bottom: 1px solid var(--ink);
   backdrop-filter: blur(10px);
 }
 
@@ -457,13 +457,95 @@ a {
   top: var(--bar-h);
   left: 0;
   bottom: 0;
-  width: min(var(--panel-w), 100%);
   z-index: 25;
-  background: var(--paper);
-  border-right: 1px solid var(--ink);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: auto;
+  max-width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  pointer-events: none;
+}
+
+.admin-panel.is-rail-only {
+  bottom: auto;
+  width: auto;
+}
+
+.admin-panel-rail {
+  pointer-events: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: var(--panel-rail-w);
+  padding: 8px 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(239, 236, 227, 0.55);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+}
+
+.admin-panel .admin-panel-rail-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.admin-panel-rail-btn:hover {
+  color: var(--ink);
+  background: rgba(28, 27, 24, 0.08);
+}
+
+.admin-panel-rail-btn.is-active {
+  color: var(--ink);
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.admin-panel-rail-btn.has-dot::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+
+.admin-panel-body {
+  pointer-events: auto;
+  flex: 0 1 auto;
+  width: min(var(--panel-w), calc(100vw - var(--panel-rail-w) - 40px));
+  max-height: calc(100vh - var(--bar-h) - 24px);
   overflow: auto;
   padding: 16px;
-  font-family: var(--font-ui);
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: rgba(239, 236, 227, 0.72);
+  backdrop-filter: blur(40px) saturate(1.25);
+  -webkit-backdrop-filter: blur(40px) saturate(1.25);
+}
+
+.admin-panel-body > .inspector-block {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
 }
 
 .admin-panel h2 {
@@ -786,11 +868,42 @@ a {
   }
 
   .admin-panel {
-    width: 100%;
-    max-height: 55vh;
+    width: auto;
+    max-height: none;
     bottom: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--ink);
+    right: 0;
+    padding: 10px;
+  }
+
+  .admin-panel:not(.is-rail-only) {
+    flex-direction: column;
+    align-items: stretch;
+    max-height: 55vh;
+  }
+
+  .admin-panel.is-rail-only {
+    width: auto;
+    max-height: none;
+  }
+
+  .admin-panel.is-rail-only .admin-panel-rail {
+    flex-direction: row;
+    width: auto;
+    padding: 6px 8px;
+  }
+
+  .admin-panel:not(.is-rail-only) .admin-panel-rail {
+    flex-direction: row;
+    width: auto;
+    align-self: flex-start;
+    padding: 6px 8px;
+  }
+
+  .admin-panel-body {
+    width: auto;
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .panel-backdrop {
@@ -1082,6 +1195,98 @@ html.cutout-editor-open .admin-page {
 .auth-panel a,
 .account-wrap a {
   color: inherit;
+}
+
+.account-board-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+}
+
+.account-board-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(28, 27, 24, 0.18);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.account-modal {
+  width: min(420px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(239, 236, 227, 0.94);
+  backdrop-filter: blur(20px);
+}
+
+.account-preview {
+  display: block;
+  max-width: 160px;
+  max-height: 160px;
+  margin: 0 0 16px;
+  object-fit: contain;
+}
+
+.user-board-page {
+  min-height: 100vh;
+}
+
+.user-section-rail {
+  position: fixed;
+  top: 56px;
+  left: 12px;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-section-chip {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  background: rgba(239, 236, 227, 0.8);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.user-section-chip input {
+  border: 0;
+  background: transparent;
+  width: 110px;
+}
+
+.user-inspector,
+.user-suggest {
+  position: fixed;
+  right: 16px;
+  bottom: 64px;
+  z-index: 28;
+  width: min(280px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(239, 236, 227, 0.92);
+}
+
+.affiliate-disclosure {
+  position: relative;
+  z-index: 5;
+  margin: 0;
+  padding: 16px 20px 28px;
+  color: var(--ink-muted);
+  font-size: 12px;
 }
 
 .item-modal-share-menu {

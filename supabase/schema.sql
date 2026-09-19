@@ -16,10 +16,12 @@ create table if not exists public.items (
   rotation double precision not null default 0,
   z_index integer not null default 0,
   tags text[] not null default '{}'::text[],
+  section_id uuid references public.board_sections(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
 create index if not exists items_z_index_idx on public.items (z_index);
+create index if not exists items_section_id_idx on public.items (section_id);
 
 alter table public.items enable row level security;
 
@@ -210,5 +212,6 @@ on conflict (id) do nothing;
 -- User accounts (shop + network share public.profiles).
 -- Username and public handles: supabase/migrations/20260919193000_profile_usernames.sql
 -- and supabase/migrations/20260919194500_profile_handles.sql
+-- Per-user boards (parallel to public.items): supabase/migrations/20260919201500_user_boards.sql
 
 

@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { AwsClient } from 'aws4fetch'
 import { loadEnv, type Plugin } from 'vite'
 import { MAX_UPLOAD_BYTES } from '../shared/constants.ts'
-import { bearerToken, fetchAuthedUser, userIsProjectAdmin } from '../shared/admin.ts'
+import { bearerToken, requireSignedIn, userIsProjectAdmin } from '../shared/admin.ts'
 import { fetchProductHero } from '../shared/fetchProductImage.ts'
 import {
   assertPngCanBeTransparent,
@@ -35,26 +35,6 @@ async function readBody(req: IncomingMessage): Promise<Buffer> {
     chunks.push(buf)
   }
   return Buffer.concat(chunks)
-}
-
-async function requireAdmin(req: IncomingMessage, env: Record<string, string>) {
-  const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL
-  const anonKey =
-    env.SUPABASE_ANON_KEY ||
-    env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    env.VITE_SUPABASE_ANON_KEY
-  if (!supabaseUrl || !anonKey) return
-  const token = bearerToken(
-    typeof req.headers.authorization === 'string' ? req.headers.authorization : null,
-  )
-  if (!token) {
-    throw Object.assign(new Error('Sign in required.'), { status: 401 })
-  }
-  const user = await fetchAuthedUser(supabaseUrl, anonKey, token)
-  const allowed = await userIsProjectAdmin(supabaseUrl, anonKey, token, user)
-  if (!allowed) {
-    throw Object.assign(new Error('Admin role required.'), { status: 403 })
-  }
 }
 
 async function putR2(
@@ -104,7 +84,21 @@ export function knollDevApi(): Plugin {
 
         void (async () => {
           try {
-            await requireAdmin(req, env)
+            const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL
+            const anonKey =
+              env.SUPABASE_ANON_KEY ||
+              env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+              env.VITE_SUPABASE_ANON_KEY
+            if (supabaseUrl && anonKey) {
+              const token = bearerToken(
+                typeof req.headers.authorization === 'string' ? req.headers.authorization : null,
+              )
+              if (!token) {
+                json(res, 401, { error: 'Sign in required.' })
+                return
+              }
+              await requireSignedIn(supabaseUrl, anonKey, token)
+            }
             const raw = await readBody(req)
             const payload = JSON.parse(raw.toString('utf8')) as { url?: unknown }
             const url = typeof payload.url === 'string' ? payload.url.trim() : ''
@@ -116,9 +110,10 @@ export function knollDevApi(): Plugin {
             res.statusCode = 200
             res.setHeader('Content-Type', hero.contentType)
             res.setHeader('Cache-Control', 'no-store')
-            if (hero.title) {
-              res.setHeader('X-Product-Title', encodeURIComponent(hero.title))
-            }
+            if (hero.title) res.setHeader('X-Product-Title', encodeURIComponent(hero.title))
+            if (hero.price != null) res.setHeader('X-Product-Price', String(hero.price))
+            if (hero.currency) res.setHeader('X-Product-Currency', hero.currency)
+            if (hero.imageUrl) res.setHeader('X-Product-Image-Url', hero.imageUrl)
             res.end(Buffer.from(hero.bytes))
           } catch (err) {
             const status = (err as { status?: number }).status ?? 400
@@ -142,7 +137,24 @@ export function knollDevApi(): Plugin {
 
         void (async () => {
           try {
-            await requireAdmin(req, env)
+            const supabaseUrl = env.SUPABASE_URL || env.VITE_SUPABASE_URL
+            const anonKey =
+              env.SUPABASE_ANON_KEY ||
+              env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+              env.VITE_SUPABASE_ANON_KEY
+            let folder = 'items'
+            if (supabaseUrl && anonKey) {
+              const token = bearerToken(
+                typeof req.headers.authorization === 'string' ? req.headers.authorization : null,
+              )
+              if (!token) {
+                json(res, 401, { error: 'Sign in required.' })
+                return
+              }
+              const user = await requireSignedIn(supabaseUrl, anonKey, token)
+              const admin = await userIsProjectAdmin(supabaseUrl, anonKey, token, user)
+              folder = admin ? 'items' : `users/${user.id}`
+            }
             const buffer = await readBody(req)
             const bytes = new Uint8Array(buffer)
             const info = parsePng(bytes)
@@ -154,7 +166,7 @@ export function knollDevApi(): Plugin {
               })
               return
             }
-            const key = objectKey()
+            const key = objectKey(folder)
             const uploaded = await putR2(env, key, buffer)
             if (uploaded) {
               json(res, 200, { path: key, width: info.width, height: info.height })

@@ -24,6 +24,18 @@ function isPrivateIPv4(host: string): boolean {
   return false;
 }
 
+function isPrivateIPv6(host: string): boolean {
+  const h = host.replace(/^\[|\]$/g, '').toLowerCase();
+  if (h === '::1' || h === '0:0:0:0:0:0:0:1') return true;
+  if (h.startsWith('fe80:') || h.startsWith('fec0:')) return true;
+  if (h.startsWith('fc') || h.startsWith('fd')) return true;
+  if (h.startsWith('::ffff:')) {
+    const mapped = h.slice('::ffff:'.length);
+    if (isPrivateIPv4(mapped)) return true;
+  }
+  return false;
+}
+
 export function assertPublicHttpUrl(raw: string): URL {
   let url: URL;
   try {
@@ -35,7 +47,14 @@ export function assertPublicHttpUrl(raw: string): URL {
     throw new Error('Only http and https URLs are allowed.');
   }
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (PRIVATE_HOSTS.has(host) || host.endsWith('.localhost') || isPrivateIPv4(host)) {
+  if (
+    PRIVATE_HOSTS.has(host) ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.internal') ||
+    host === 'metadata.google.internal' ||
+    isPrivateIPv4(host) ||
+    isPrivateIPv6(host)
+  ) {
     throw new Error('That URL is not allowed.');
   }
   return url;
@@ -119,8 +138,60 @@ export function amazonWidgetImageUrl(page: URL, asin: string): string {
   return `https://${adsHost}/widgets/q?_encoding=UTF8&MarketPlace=${marketplace}&ASIN=${asin}&ServiceVersion=20070822&ID=AsinImage&WS=1&Format=_SL1500_`;
 }
 
-export function extractProductMeta(html: string): { image: string | null; title: string | null } {
+function extractJsonLdProduct(html: string): {
+  image: string | null;
+  title: string | null;
+  price: number | null;
+  currency: string | null;
+} {
+  const empty = { image: null, title: null, price: null, currency: null };
+  const blocks = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  for (const block of blocks) {
+    try {
+      const parsed = JSON.parse(decodeHtmlEntities(block[1] ?? '')) as unknown;
+      const nodes = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object' && Array.isArray((parsed as { '@graph'?: unknown[] })['@graph'])
+          ? ((parsed as { '@graph': unknown[] })['@graph'] ?? [])
+          : [parsed];
+      for (const node of nodes) {
+        if (!node || typeof node !== 'object') continue;
+        const row = node as Record<string, unknown>;
+        const type = String(row['@type'] ?? '');
+        if (!/product/i.test(type)) continue;
+        const offers = (Array.isArray(row.offers) ? row.offers[0] : row.offers) as
+          | Record<string, unknown>
+          | undefined;
+        const rawPrice = offers?.price ?? offers?.lowPrice ?? row.price;
+        const price = rawPrice != null && Number.isFinite(Number(rawPrice)) ? Number(rawPrice) : null;
+        const image = typeof row.image === 'string'
+          ? row.image
+          : Array.isArray(row.image) && typeof row.image[0] === 'string'
+            ? row.image[0]
+            : null;
+        return {
+          image,
+          title: typeof row.name === 'string' ? row.name : null,
+          price,
+          currency: typeof offers?.priceCurrency === 'string' ? offers.priceCurrency : null,
+        };
+      }
+    } catch {
+      // keep scanning
+    }
+  }
+  return empty;
+}
+
+export function extractProductMeta(html: string): {
+  image: string | null;
+  title: string | null;
+  price: number | null;
+  currency: string | null;
+} {
+  const jsonLd = extractJsonLdProduct(html);
   const image =
+    jsonLd.image ??
     firstGroup(html, [
       /"hiRes"\s*:\s*"(https:\\\/\\\/[^"]+)"/,
       /"hiRes"\s*:\s*"(https:\/\/[^"]+)"/,
@@ -145,7 +216,9 @@ export function extractProductMeta(html: string): { image: string | null; title:
 
   return {
     image: image ? cleanAmazonImageUrl(image.replace(/\\\//g, '/')) : null,
-    title: cleanProductTitle(title),
+    title: cleanProductTitle(jsonLd.title ?? title),
+    price: jsonLd.price,
+    currency: jsonLd.currency,
   };
 }
 

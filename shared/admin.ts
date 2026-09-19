@@ -51,6 +51,60 @@ export async function userIsProjectAdmin(
   return Array.isArray(rows) && rows.length > 0;
 }
 
+export async function requireSignedIn(
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  accessToken: string,
+): Promise<{ id: string; app_metadata?: { role?: unknown; roles?: unknown } }> {
+  const user = await fetchAuthedUser(supabaseUrl, supabaseAnonKey, accessToken);
+  if (!user.id) throw Object.assign(new Error('Sign in required.'), { status: 401 });
+  return { ...user, id: user.id };
+}
+
+export async function countRecentHits(
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  accessToken: string,
+  userId: string,
+  kind: string,
+  windowMs: number,
+): Promise<number> {
+  const since = new Date(Date.now() - windowMs).toISOString();
+  const response = await fetch(
+    `${supabaseUrl.replace(/\/$/, '')}/rest/v1/user_api_hits?user_id=eq.${userId}&kind=eq.${kind}&created_at=gte.${since}&select=id`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: supabaseAnonKey,
+        Prefer: 'count=exact',
+        Range: '0-0',
+      },
+    },
+  );
+  const range = response.headers.get('content-range');
+  const total = range?.split('/')[1];
+  return total && total !== '*' ? Number(total) : 0;
+}
+
+export async function recordHit(
+  supabaseUrl: string,
+  supabaseAnonKey: string,
+  accessToken: string,
+  userId: string,
+  kind: string,
+): Promise<void> {
+  await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/user_api_hits`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseAnonKey,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({ user_id: userId, kind }),
+  });
+}
+
 export function bearerToken(header: string | null): string | null {
   if (!header) return null;
   if (!header.startsWith('Bearer ')) return null;

@@ -1,9 +1,15 @@
-import { Stage, Layer, Rect, Group } from 'react-konva';
+import { Circle, Group, Line, Stage, Layer, Rect } from 'react-konva';
 import { useCallback, useMemo, useState } from 'react';
 import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
+import type { GravityWell } from '../lib/wells.ts';
 import { ProductNode } from './ProductNode.tsx';
+
+export type BoardWell = GravityWell & {
+  sectionId: string;
+  color: string;
+};
 
 type Props = {
   items: Item[];
@@ -12,6 +18,10 @@ type Props = {
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   onCommit?: (id: string, patch: ItemPatch) => void;
+  wells?: BoardWell[];
+  onDragStartItem?: (id: string) => void;
+  onDragMoveItem?: (id: string, x: number, y: number) => void;
+  onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
 export function Board({
@@ -21,6 +31,10 @@ export function Board({
   selectedId = null,
   onSelect,
   onCommit,
+  wells = [],
+  onDragStartItem,
+  onDragMoveItem,
+  onDragEndItem,
 }: Props) {
   const fit = useStageFit(items, zoom);
   const copies = mode === 'public' ? PUBLIC_BOARD_COPIES : 1;
@@ -37,6 +51,7 @@ export function Board({
 
   const loadedCount = items.filter((item) => loaded[item.id]).length;
   const showProgress = items.length > 0 && loadedCount < items.length;
+  const showWells = mode === 'admin' && wells.length > 0;
 
   return (
     <div className="board-scroll" data-loop={copies > 1 ? String(copies) : undefined}>
@@ -73,10 +88,42 @@ export function Board({
                   onSelect={(id) => onSelect?.(id)}
                   onCommit={(id, patch) => onCommit?.(id, patch)}
                   onLoaded={handleLoaded}
+                  onDragStartItem={onDragStartItem}
+                  onDragMoveItem={onDragMoveItem}
+                  onDragEndItem={onDragEndItem}
                 />
               ))}
             </Group>
           ))}
+          {showWells
+            ? wells.map((well) => (
+                <Group key={well.id} x={well.x} y={well.y} listening={false}>
+                  {[30, 60, 95].map((radius) => (
+                    <Circle
+                      key={radius}
+                      radius={radius}
+                      stroke={well.color}
+                      strokeWidth={1.5}
+                      opacity={0.22}
+                      listening={false}
+                    />
+                  ))}
+                  <Circle radius={9} fill={well.color} opacity={0.9} />
+                  <Line
+                    points={[-18, 0, 18, 0]}
+                    stroke={well.color}
+                    strokeWidth={1.5}
+                    listening={false}
+                  />
+                  <Line
+                    points={[0, -18, 0, 18]}
+                    stroke={well.color}
+                    strokeWidth={1.5}
+                    listening={false}
+                  />
+                </Group>
+              ))
+            : null}
         </Layer>
       </Stage>
       {showProgress ? (

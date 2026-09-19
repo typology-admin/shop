@@ -12,6 +12,8 @@ export type Item = {
   rotation: number;
   z_index: number;
   tags: string[];
+  /** Scene / gravity well this object is attracted to. */
+  section_id: string | null;
   created_at: string;
   image_rev?: number;
 };
@@ -36,5 +38,6 @@ export type ItemPatch = Partial<
     | 'rotation'
     | 'z_index'
     | 'tags'
+    | 'section_id'
   >
 >;

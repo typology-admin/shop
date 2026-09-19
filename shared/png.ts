@@ -292,6 +292,6 @@ export async function pngHasSeeThroughPixel(bytes: Uint8Array): Promise<boolean>
   return samplesAreSeeThrough(samples, body);
 }
 
-export function objectKey(): string {
-  return `items/${crypto.randomUUID()}.png`;
+export function objectKey(folder = 'items'): string {
+  return `${folder.replace(/\/$/, '')}/${crypto.randomUUID()}.png`;
 }

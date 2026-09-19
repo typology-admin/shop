@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { fetchPublicProfile, type Profile } from '../lib/profile.ts';
+import { listPublicBoards, type UserBoard } from '../lib/userBoards.ts';
 
 export function UserProfile() {
   const { username = '' } = useParams();
   const auth = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [boards, setBoards] = useState<UserBoard[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
 
@@ -20,10 +22,15 @@ export function UserProfile() {
     }
     setStatus('loading');
     void fetchPublicProfile(username)
-      .then((next) => {
+      .then(async (next) => {
         if (cancelled) return;
+        if (!next) {
+          setStatus('missing');
+          return;
+        }
         setProfile(next);
-        setStatus(next ? 'ready' : 'missing');
+        setBoards(await listPublicBoards(next.id));
+        setStatus('ready');
       })
       .catch((err) => {
         if (cancelled) return;
@@ -66,7 +73,6 @@ export function UserProfile() {
         {nav}
         <div>
           <div className="loading-mark" />
-          <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">Looking up @{username}…</p>
         </div>
       </div>
@@ -95,7 +101,17 @@ export function UserProfile() {
       <div className="account-wrap">
         <p className="auth-kicker">@{profile.username}</p>
         <h1 className="wordmark wordmark-ui">{profile.display_name || profile.username}</h1>
-        <p className="lede">No public boards yet.</p>
+        {boards.length === 0 ? (
+          <p className="lede">No public boards yet.</p>
+        ) : (
+          <ul className="account-board-list">
+            {boards.map((board) => (
+              <li key={board.id}>
+                <Link to={`/u/${profile.username}/${board.slug}`}>{board.title}</Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

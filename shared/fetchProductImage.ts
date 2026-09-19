@@ -15,6 +15,9 @@ export type ProductHero = {
   bytes: Uint8Array;
   contentType: string;
   title: string | null;
+  price: number | null;
+  currency: string | null;
+  imageUrl: string | null;
 };
 
 function looksLikeImage(contentType: string): boolean {
@@ -64,6 +67,9 @@ async function fetchImageBytes(imageUrl: string, referer?: string): Promise<Prod
     bytes: new Uint8Array(buffer),
     contentType: mimeFromHeader(contentType),
     title: null,
+    price: null,
+    currency: null,
+    imageUrl: imageUrl,
   };
 }
 
@@ -85,6 +91,9 @@ export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
           bytes: new Uint8Array(buffer),
           contentType: mimeFromHeader(contentType),
           title: null,
+          price: null,
+          currency: null,
+          imageUrl: url.toString(),
         };
       }
 
@@ -97,7 +106,13 @@ export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
         const meta = extractProductMeta(html);
         if (meta.image) {
           const hero = await fetchImageBytes(resolveFetchedUrl(meta.image, url.toString()), `${url.origin}/`);
-          return { ...hero, title: meta.title };
+          return {
+            ...hero,
+            title: meta.title,
+            price: meta.price,
+            currency: meta.currency,
+            imageUrl: hero.imageUrl ?? meta.image,
+          };
         }
       }
     }

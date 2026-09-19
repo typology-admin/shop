@@ -1,14 +1,10 @@
-import { CANVAS_WIDTH } from '../../shared/constants.ts';
+import { CANVAS_WIDTH, type KnollRotationMode } from '../../shared/constants.ts';
 import { footprintForItem, footprintFromFile, type ItemFootprint } from './itemMask.ts';
 import type { BoardSection } from './sections.ts';
 import type { Item } from './types.ts';
+import { wellsForSection, type GravityWell } from './wells.ts';
 
-const CELL = 8;
-const MARGIN = 64;
-const ROTATIONS = [0, 90, 180, 270];
-const SPIRAL_RINGS = 160;
-/** Extra vertical room around a section so large cutouts still fit. */
-const BAND_PAD = 900;
+export type { KnollRotationMode };
 
 export type KnollPose = {
   id: string;
@@ -17,26 +13,47 @@ export type KnollPose = {
   rotation: number;
 };
 
-type Cell = { x: number; y: number };
+const MARGIN = 64;
+const HALF_PI = Math.PI / 2;
+const TAU = Math.PI * 2;
+const MAX_STEPS = 2400;
+const COLLISION_ITERS = 3;
 
-type RotMask = {
-  rotation: number;
-  cells: Cell[];
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  height: number;
-  width: number;
+type Well = { x: number; y: number; sectionId?: string };
+
+export type GravityBody = {
+  id: string;
+  x: number;
+  y: number;
+  /** Radians */
+  a: number;
+  w: number;
+  h: number;
+  vx: number;
+  vy: number;
+  well: number;
+  /** When true, stay locked to assigned well instead of nearest. */
+  wellPinned: boolean;
+  locked: boolean;
 };
+
+type Pt = [number, number];
 
 export function nearestSection(y: number, sections: BoardSection[]): BoardSection | null {
   if (sections.length === 0) return null;
   return [...sections].sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y))[0] ?? null;
 }
 
+export function sectionForItem(item: Item, sections: BoardSection[]): BoardSection | null {
+  if (item.section_id) {
+    return sections.find((row) => row.id === item.section_id) ?? nearestSection(item.y, sections);
+  }
+  return nearestSection(item.y, sections);
+}
+
 export function sectionGravity(section: BoardSection): { x: number; y: number } {
-  return { x: CANVAS_WIDTH / 2, y: section.y };
+  const primary = wellsForSection(section)[0];
+  return primary ? { x: primary.x, y: primary.y } : { x: CANVAS_WIDTH / 2, y: section.y };
 }
 
 export function sectionBand(section: BoardSection, sections: BoardSection[]): { y0: number; y1: number } {
@@ -50,201 +67,295 @@ export function sectionBand(section: BoardSection, sections: BoardSection[]): { 
 }
 
 export function itemsForSection(items: Item[], section: BoardSection, sections: BoardSection[]): Item[] {
-  return items.filter((item) => nearestSection(item.y, sections)?.id === section.id);
+  return items.filter((item) => sectionForItem(item, sections)?.id === section.id);
 }
 
-function rotatePoint(x: number, y: number, degrees: number): { x: number; y: number } {
-  const rad = (degrees * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  return { x: x * cos - y * sin, y: x * sin + y * cos };
+function nearestWellIndex(x: number, y: number, wells: Well[]): number {
+  let best = 0;
+  let bestDist = Infinity;
+  wells.forEach((well, index) => {
+    const d = (well.x - x) ** 2 + (well.y - y) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = index;
+    }
+  });
+  return best;
 }
 
-function uniqueCells(cells: Cell[]): Cell[] {
-  const seen = new Set<string>();
-  const out: Cell[] = [];
-  for (const cell of cells) {
-    const key = `${cell.x},${cell.y}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(cell);
+function wellIndexForItem(item: Item, wells: Well[]): { index: number; pinned: boolean } {
+  if (item.section_id) {
+    const pinned = wells.findIndex((well) => well.sectionId === item.section_id);
+    if (pinned >= 0) return { index: pinned, pinned: true };
   }
-  return out;
+  return { index: nearestWellIndex(item.x, item.y, wells), pinned: false };
 }
 
-function dilate(cells: Cell[], radius: number): Cell[] {
-  if (radius <= 0) return cells;
-  const seen = new Set<string>();
-  const out: Cell[] = [];
-  const r2 = radius * radius;
-  for (const cell of cells) {
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        if (dx * dx + dy * dy > r2) continue;
-        const x = cell.x + dx;
-        const y = cell.y + dy;
-        const key = `${x},${y}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({ x, y });
+function sizeFromFootprint(footprint: ItemFootprint, item: Item): { w: number; h: number } {
+  const fw = footprint.maxX - footprint.minX;
+  const fh = footprint.maxY - footprint.minY;
+  const w = fw > 8 ? fw * item.scale : item.image_width * item.scale;
+  const h = fh > 8 ? fh * item.scale : item.image_height * item.scale;
+  return { w: Math.max(16, w), h: Math.max(16, h) };
+}
+
+async function footprintFor(item: Item, file: Blob | undefined): Promise<ItemFootprint> {
+  if (file) return footprintFromFile(file, item.image_width, item.image_height);
+  return footprintForItem(item.image_path, item.image_width, item.image_height);
+}
+
+function poly(body: GravityBody, gap: number): Pt[] {
+  const c = Math.cos(body.a);
+  const s = Math.sin(body.a);
+  const hw = (body.w + gap) / 2;
+  const hh = (body.h + gap) / 2;
+  const corners: Pt[] = [
+    [-hw, -hh],
+    [hw, -hh],
+    [hw, hh],
+    [-hw, hh],
+  ];
+  return corners.map(([px, py]) => [body.x + px * c - py * s, body.y + px * s + py * c]);
+}
+
+function sat(A: Pt[], B: Pt[]): { nx: number; ny: number; depth: number } | null {
+  let depth = 1e9;
+  let nx = 0;
+  let ny = 0;
+  for (const P of [A, B]) {
+    for (let i = 0; i < P.length; i += 1) {
+      const p = P[i];
+      const q = P[(i + 1) % P.length];
+      if (!p || !q) continue;
+      let ax = -(q[1] - p[1]);
+      let ay = q[0] - p[0];
+      const len = Math.hypot(ax, ay) || 1;
+      ax /= len;
+      ay /= len;
+      let minA = 1e9;
+      let maxA = -1e9;
+      let minB = 1e9;
+      let maxB = -1e9;
+      for (const v of A) {
+        const d = v[0] * ax + v[1] * ay;
+        if (d < minA) minA = d;
+        if (d > maxA) maxA = d;
+      }
+      for (const v of B) {
+        const d = v[0] * ax + v[1] * ay;
+        if (d < minB) minB = d;
+        if (d > maxB) maxB = d;
+      }
+      const overlap = Math.min(maxA, maxB) - Math.max(minA, minB);
+      if (overlap <= 0) return null;
+      if (overlap < depth) {
+        depth = overlap;
+        nx = ax;
+        ny = ay;
       }
     }
   }
-  return out;
+  return { nx, ny, depth };
 }
 
-function maskForRotation(footprint: ItemFootprint, scale: number, rotation: number): RotMask {
-  const cells: Cell[] = [];
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const point of footprint.points) {
-    const rotated = rotatePoint(point.x * scale, point.y * scale, rotation);
-    const x = Math.round(rotated.x / CELL);
-    const y = Math.round(rotated.y / CELL);
-    cells.push({ x, y });
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  const unique = uniqueCells(cells);
-  if (!unique.length) {
-    return { rotation, cells: [{ x: 0, y: 0 }], minX: 0, maxX: 0, minY: 0, maxY: 0, height: 1, width: 1 };
-  }
-  return {
-    rotation,
-    cells: unique,
-    minX,
-    maxX,
-    minY,
-    maxY,
-    height: maxY - minY + 1,
-    width: maxX - minX + 1,
-  };
+function angDiff(target: number, current: number, period: number): number {
+  return target + Math.round((current - target) / period) * period;
 }
 
-class Occupancy {
-  private readonly x0: number;
-  private readonly y0: number;
-  private readonly cols: number;
-  private readonly rows: number;
-  private readonly data: Uint8Array;
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
 
-  constructor(x0: number, y0: number, cols: number, rows: number) {
-    this.x0 = x0;
-    this.y0 = y0;
-    this.cols = cols;
-    this.rows = rows;
-    this.data = new Uint8Array(cols * rows);
-  }
+export type GravityStepOptions = {
+  bodies: GravityBody[];
+  wells: Well[];
+  gap: number;
+  mode: KnollRotationMode;
+  gravity: boolean;
+  bounds: { x0: number; x1: number; y0: number; y1: number };
+  /** Energy left in the settle (1 → 0). */
+  alpha: number;
+};
 
-  private index(cx: number, cy: number): number | null {
-    const x = cx - this.x0;
-    const y = cy - this.y0;
-    if (x < 0 || y < 0 || x >= this.cols || y >= this.rows) return null;
-    return y * this.cols + x;
-  }
+/** One prototype-style frame: a few physics ticks + alpha decay. */
+export function stepGravityFrame(options: GravityStepOptions): number {
+  const { bodies, wells, gap, mode, gravity, bounds } = options;
+  let alpha = options.alpha;
+  if (alpha <= 0) return 0;
 
-  /** True when every cell is inside the grid and free. */
-  fits(ox: number, oy: number, cells: Cell[]): boolean {
-    for (const cell of cells) {
-      const index = this.index(ox + cell.x, oy + cell.y);
-      if (index == null || this.data[index]) return false;
+  for (let tick = 0; tick < 3 && alpha > 0; tick += 1) {
+    for (const it of bodies) {
+      if (it.locked) {
+        it.vx = 0;
+        it.vy = 0;
+        continue;
+      }
+      const well = wells[it.well] ?? wells[0];
+      if (!well) continue;
+      const dx = well.x - it.x;
+      const dy = well.y - it.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (gravity) {
+        const pull = Math.min(d, 480) * 0.01 * alpha;
+        it.vx += (dx / d) * pull;
+        it.vy += (dy / d) * pull;
+        it.vx *= 0.8;
+        it.vy *= 0.8;
+        it.x += it.vx;
+        it.y += it.vy;
+      }
+
+      if (mode !== 'none') {
+        let target: number;
+        let period: number;
+        if (mode === 'grid') {
+          target = 0;
+          period = HALF_PI;
+        } else {
+          const th = Math.atan2(dy, dx);
+          target = it.h >= it.w ? th + HALF_PI : th;
+          period = Math.PI;
+        }
+        const t = angDiff(target, it.a, period);
+        it.a += (t - it.a) * 0.12 * Math.min(1, alpha * 3);
+      }
     }
-    return true;
+
+    for (let iter = 0; iter < COLLISION_ITERS; iter += 1) {
+      const polys = bodies.map((body) => poly(body, gap));
+      for (let i = 0; i < bodies.length; i += 1) {
+        for (let j = i + 1; j < bodies.length; j += 1) {
+          const A = bodies[i];
+          const B = bodies[j];
+          if (!A || !B) continue;
+          const ra = Math.max(A.w, A.h) / 2 + gap;
+          const rb = Math.max(B.w, B.h) / 2 + gap;
+          if (Math.hypot(A.x - B.x, A.y - B.y) > (ra + rb) * 1.5) continue;
+          const hit = sat(polys[i]!, polys[j]!);
+          if (!hit) continue;
+          let { nx, ny } = hit;
+          if ((B.x - A.x) * nx + (B.y - A.y) * ny < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          const fa = A.locked ? 0 : 1;
+          const fb = B.locked ? 0 : 1;
+          const tot = fa + fb;
+          if (!tot) continue;
+          const push = hit.depth + 0.01;
+          A.x -= (nx * push * fa) / tot;
+          A.y -= (ny * push * fa) / tot;
+          B.x += (nx * push * fb) / tot;
+          B.y += (ny * push * fb) / tot;
+        }
+      }
+    }
+
+    for (const it of bodies) {
+      if (it.locked) continue;
+      it.x = clamp(it.x, bounds.x0, bounds.x1);
+      it.y = clamp(it.y, bounds.y0, bounds.y1);
+      if (!it.wellPinned) {
+        it.well = nearestWellIndex(it.x, it.y, wells);
+      }
+    }
+
+    alpha *= 0.994;
   }
 
-  stamp(ox: number, oy: number, cells: Cell[]): void {
-    for (const cell of cells) {
-      const index = this.index(ox + cell.x, oy + cell.y);
-      if (index != null) this.data[index] = 1;
+  return alpha < 0.01 ? 0 : alpha;
+}
+
+export function finalizeGravityBodies(bodies: GravityBody[], mode: KnollRotationMode): KnollPose[] {
+  for (const it of bodies) {
+    it.vx = 0;
+    it.vy = 0;
+    if (mode === 'grid' && !it.locked) {
+      it.a = Math.round(it.a / HALF_PI) * HALF_PI;
     }
+    it.a = ((((it.a + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
   }
-}
-
-function* spiral(cx: number, cy: number, maxRings: number): Generator<Cell> {
-  yield { x: cx, y: cy };
-  for (let ring = 1; ring <= maxRings; ring += 1) {
-    for (let x = -ring; x <= ring; x += 1) {
-      yield { x: cx + x, y: cy - ring };
-      yield { x: cx + x, y: cy + ring };
-    }
-    for (let y = -ring + 1; y <= ring - 1; y += 1) {
-      yield { x: cx - ring, y: cy + y };
-      yield { x: cx + ring, y: cy + y };
-    }
-  }
-}
-
-function buildOccupancy(band: { y0: number; y1: number }, maskPadCells: number): Occupancy {
-  const x0 = Math.floor(MARGIN / CELL);
-  const x1 = Math.ceil((CANVAS_WIDTH - MARGIN) / CELL);
-  const y0 = Math.floor((band.y0 - BAND_PAD) / CELL) - maskPadCells;
-  const y1 = Math.ceil((band.y1 + BAND_PAD) / CELL) + maskPadCells;
-  return new Occupancy(x0, y0, Math.max(16, x1 - x0), Math.max(16, y1 - y0));
-}
-
-function placeOne(
-  occupancy: Occupancy,
-  masks: RotMask[],
-  gravity: Cell,
-  dilated: RotMask[],
-): { x: number; y: number; rotation: number } | null {
-  for (const cell of spiral(gravity.x, gravity.y, SPIRAL_RINGS)) {
-    let best: RotMask | null = null;
-    for (const mask of masks) {
-      // Collision uses the dilated silhouette so gap is part of the fit test.
-      const probe = dilated.find((row) => row.rotation === mask.rotation) ?? mask;
-      if (!occupancy.fits(cell.x, cell.y, probe.cells)) continue;
-      if (!best || mask.height * mask.width < best.height * best.width) best = mask;
-    }
-    if (!best) continue;
-    const stamp = dilated.find((row) => row.rotation === best.rotation) ?? best;
-    occupancy.stamp(cell.x, cell.y, stamp.cells);
-    return { x: cell.x * CELL, y: cell.y * CELL, rotation: best.rotation };
-  }
-  return null;
-}
-
-function fallbackPose(
-  gravity: { x: number; y: number },
-  index: number,
-  mask: RotMask | undefined,
-): { x: number; y: number; rotation: number } {
-  const pitch = Math.max(48, ((mask?.width ?? 4) + 2) * CELL);
-  const col = index % 5;
-  const row = Math.floor(index / 5);
-  return {
-    x: gravity.x + (col - 2) * pitch,
-    y: gravity.y + row * pitch,
-    rotation: mask?.rotation ?? 0,
-  };
-}
-
-async function masksForItem(
-  item: Item,
-  file: Blob | undefined,
-  radius: number,
-): Promise<{ raw: RotMask[]; dilated: RotMask[] }> {
-  const footprint: ItemFootprint = file
-    ? await footprintFromFile(file, item.image_width, item.image_height)
-    : await footprintForItem(item.image_path, item.image_width, item.image_height);
-  const raw = ROTATIONS.map((rotation) => maskForRotation(footprint, item.scale, rotation));
-  const dilated = raw.map((mask) => ({
-    ...mask,
-    cells: dilate(mask.cells, radius),
+  return bodies.map((body) => ({
+    id: body.id,
+    x: body.x,
+    y: body.y,
+    rotation: toDegrees(body.a),
   }));
-  return { raw, dilated };
 }
 
-function maxMaskRadius(masks: RotMask[]): number {
-  let max = 4;
-  for (const mask of masks) {
-    max = Math.max(max, Math.abs(mask.minX), Math.abs(mask.maxX), Math.abs(mask.minY), Math.abs(mask.maxY));
+export function canvasGravityBounds(): { x0: number; x1: number; y0: number; y1: number } {
+  return { x0: MARGIN, x1: CANVAS_WIDTH - MARGIN, y0: MARGIN, y1: 1e7 };
+}
+
+export async function buildGravityBodies(
+  items: Item[],
+  wells: Well[],
+  files?: Record<string, Blob>,
+): Promise<GravityBody[]> {
+  const bodies: GravityBody[] = [];
+  for (const item of items) {
+    const footprint = await footprintFor(item, files?.[item.id]);
+    const { w, h } = sizeFromFootprint(footprint, item);
+    const assigned = wellIndexForItem(item, wells);
+    bodies.push({
+      id: item.id,
+      x: item.x,
+      y: item.y,
+      a: (item.rotation * Math.PI) / 180,
+      w,
+      h,
+      vx: 0,
+      vy: 0,
+      well: assigned.index,
+      wellPinned: assigned.pinned,
+      locked: false,
+    });
   }
-  return max;
+  return bodies;
+}
+
+function relaxBodies(options: {
+  bodies: GravityBody[];
+  wells: Well[];
+  gap: number;
+  mode: KnollRotationMode;
+  gravity: boolean;
+  bounds: { x0: number; x1: number; y0: number; y1: number };
+}): void {
+  let alpha = 1;
+  let steps = 0;
+  while (alpha > 0.01 && steps < MAX_STEPS) {
+    alpha = stepGravityFrame({ ...options, alpha });
+    steps += 1;
+  }
+  finalizeGravityBodies(options.bodies, options.mode);
+}
+
+function toDegrees(radians: number): number {
+  return (radians * 180) / Math.PI;
+}
+
+export function seedAroundWells(bodies: GravityBody[], wells: Well[]): void {
+  bodies.forEach((body, i) => {
+    if (body.locked) return;
+    const well = wells[body.well] ?? wells[0];
+    if (!well) return;
+    const angle = (i / Math.max(1, bodies.length)) * TAU;
+    const radius = 48 + i * 18;
+    body.x = well.x + Math.cos(angle) * radius;
+    body.y = well.y + Math.sin(angle) * radius;
+    body.vx = 0;
+    body.vy = 0;
+  });
+}
+
+function resolveWells(section: BoardSection, override?: GravityWell[]): Well[] {
+  const list = override && override.length ? override : wellsForSection(section);
+  return list.map((well) => ({
+    x: well.x,
+    y: well.y,
+    sectionId: well.sectionId ?? section.id,
+  }));
 }
 
 export async function packSection(options: {
@@ -253,45 +364,59 @@ export async function packSection(options: {
   sections: BoardSection[];
   gap: number;
   files?: Record<string, Blob>;
+  mode?: KnollRotationMode;
+  gravity?: boolean;
+  wells?: GravityWell[];
 }): Promise<KnollPose[]> {
   const members = [...itemsForSection(options.items, options.section, options.sections)].sort(
     (a, b) => b.image_width * b.image_height * b.scale * b.scale - a.image_width * a.image_height * a.scale * a.scale,
   );
   if (members.length === 0) return [];
 
-  const gravity = sectionGravity(options.section);
+  const wells = resolveWells(options.section, options.wells);
   const band = sectionBand(options.section, options.sections);
-  const radius = Math.max(1, Math.round(options.gap / CELL / 2));
-  const origin = { x: Math.round(gravity.x / CELL), y: Math.round(gravity.y / CELL) };
+  const bodies: GravityBody[] = [];
 
-  const prepared: Array<{ item: Item; raw: RotMask[]; dilated: RotMask[] }> = [];
-  let pad = 8;
   for (const item of members) {
-    const masks = await masksForItem(item, options.files?.[item.id], radius);
-    pad = Math.max(pad, maxMaskRadius(masks.dilated) + radius + 2);
-    prepared.push({ item, ...masks });
+    const footprint = await footprintFor(item, options.files?.[item.id]);
+    const { w, h } = sizeFromFootprint(footprint, item);
+    const assigned = wellIndexForItem(item, wells);
+    bodies.push({
+      id: item.id,
+      x: item.x,
+      y: item.y,
+      a: (item.rotation * Math.PI) / 180,
+      w,
+      h,
+      vx: 0,
+      vy: 0,
+      well: assigned.index,
+      wellPinned: assigned.pinned,
+      locked: false,
+    });
   }
 
-  const occupancy = buildOccupancy(band, pad);
-  const poses: KnollPose[] = [];
+  seedAroundWells(bodies, wells);
+  relaxBodies({
+    bodies,
+    wells,
+    gap: options.gap,
+    mode: options.mode ?? 'grid',
+    gravity: options.gravity !== false,
+    bounds: {
+      x0: MARGIN,
+      x1: CANVAS_WIDTH - MARGIN,
+      y0: band.y0 + 40,
+      y1: band.y1 - 40,
+    },
+  });
 
-  for (let i = 0; i < prepared.length; i += 1) {
-    const entry = prepared[i];
-    if (!entry) continue;
-    const placed = placeOne(occupancy, entry.raw, origin, entry.dilated);
-    if (placed) {
-      poses.push({ id: entry.item.id, ...placed });
-      continue;
-    }
-    const fallback = fallbackPose(gravity, i, entry.raw[0]);
-    const stamp = entry.dilated[0] ?? entry.raw[0];
-    if (stamp) {
-      occupancy.stamp(Math.round(fallback.x / CELL), Math.round(fallback.y / CELL), stamp.cells);
-    }
-    poses.push({ id: entry.item.id, ...fallback });
-  }
-
-  return poses;
+  return bodies.map((body) => ({
+    id: body.id,
+    x: body.x,
+    y: body.y,
+    rotation: toDegrees(body.a),
+  }));
 }
 
 export async function packNewItem(options: {
@@ -301,41 +426,75 @@ export async function packNewItem(options: {
   sections: BoardSection[];
   gap: number;
   file?: Blob;
+  mode?: KnollRotationMode;
+  gravity?: boolean;
+  wells?: GravityWell[];
 }): Promise<KnollPose> {
-  const gravity = sectionGravity(options.section);
+  const wells = resolveWells(options.section, options.wells);
   const band = sectionBand(options.section, options.sections);
-  const radius = Math.max(1, Math.round(options.gap / CELL / 2));
-  const origin = { x: Math.round(gravity.x / CELL), y: Math.round(gravity.y / CELL) };
+  const bodies: GravityBody[] = [];
 
-  const neighborMasks: Array<{ x: number; y: number; cells: Cell[] }> = [];
-  let pad = 8;
   for (const neighbor of options.neighbors) {
-    const footprint = await footprintForItem(
-      neighbor.image_path,
-      neighbor.image_width,
-      neighbor.image_height,
-    );
-    const mask = maskForRotation(footprint, neighbor.scale, neighbor.rotation);
-    const cells = dilate(mask.cells, radius);
-    pad = Math.max(pad, maxMaskRadius([{ ...mask, cells }]) + radius + 2);
-    neighborMasks.push({
-      x: Math.round(neighbor.x / CELL),
-      y: Math.round(neighbor.y / CELL),
-      cells,
+    if (neighbor.id === options.item.id) continue;
+    const footprint = await footprintFor(neighbor, undefined);
+    const { w, h } = sizeFromFootprint(footprint, neighbor);
+    const assigned = wellIndexForItem(neighbor, wells);
+    bodies.push({
+      id: neighbor.id,
+      x: neighbor.x,
+      y: neighbor.y,
+      a: (neighbor.rotation * Math.PI) / 180,
+      w,
+      h,
+      vx: 0,
+      vy: 0,
+      well: assigned.index,
+      wellPinned: assigned.pinned,
+      locked: true,
     });
   }
 
-  const { raw, dilated } = await masksForItem(options.item, options.file, radius);
-  pad = Math.max(pad, maxMaskRadius(dilated) + radius + 2);
+  const footprint = await footprintFor(options.item, options.file);
+  const { w, h } = sizeFromFootprint(footprint, options.item);
+  const primary = wells[0] ?? { x: CANVAS_WIDTH / 2, y: options.section.y };
+  const n = bodies.length;
+  const assigned = wellIndexForItem(
+    { ...options.item, section_id: options.item.section_id ?? options.section.id },
+    wells,
+  );
+  const newbie: GravityBody = {
+    id: options.item.id,
+    x: primary.x + Math.cos(n * 1.7) * (60 + n * 8),
+    y: primary.y + Math.sin(n * 1.7) * (60 + n * 8),
+    a: (options.item.rotation * Math.PI) / 180,
+    w,
+    h,
+    vx: 0,
+    vy: 0,
+    well: assigned.index,
+    wellPinned: true,
+    locked: false,
+  };
+  bodies.push(newbie);
 
-  const occupancy = buildOccupancy(band, pad);
-  for (const neighbor of neighborMasks) {
-    occupancy.stamp(neighbor.x, neighbor.y, neighbor.cells);
-  }
+  relaxBodies({
+    bodies,
+    wells,
+    gap: options.gap,
+    mode: options.mode ?? 'grid',
+    gravity: options.gravity !== false,
+    bounds: {
+      x0: MARGIN,
+      x1: CANVAS_WIDTH - MARGIN,
+      y0: band.y0 + 40,
+      y1: band.y1 - 40,
+    },
+  });
 
-  const placed = placeOne(occupancy, raw, origin, dilated);
-  if (placed) return { id: options.item.id, ...placed };
-
-  const fallback = fallbackPose(gravity, options.neighbors.length, raw[0]);
-  return { id: options.item.id, ...fallback };
+  return {
+    id: newbie.id,
+    x: newbie.x,
+    y: newbie.y,
+    rotation: toDegrees(newbie.a),
+  };
 }

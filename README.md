@@ -80,7 +80,9 @@ https://typology.network/login
 
 Also set the site URL to the production origin.
 
-Usernames live on the existing `public.profiles` row (`id = auth.users.id`). Shipping fields stay private. Public pages read `public.profile_handles` only (`username`, `display_name`). SQL is in `supabase/migrations/`.
+Usernames live on the existing `public.profiles` row (`id = auth.users.id`). Shipping fields stay private. Public pages read `public.profile_handles` only (`username`, `display_name`). Per-user boards live in `user_boards` / `user_board_items` (not the shop `items` table). SQL is in `supabase/migrations/`.
+
+User board routes: `/me`, `/u/:username`, `/u/:username/:slug`, `/s/:shareToken`. For account deletion to remove the Auth user, set `SUPABASE_SERVICE_ROLE_KEY` on the Pages Function.
 
 ## Cloudflare R2
 
