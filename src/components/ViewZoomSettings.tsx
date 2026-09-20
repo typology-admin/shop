@@ -1,12 +1,12 @@
 import {
-  MAX_KNOLL_GAP,
   MAX_SECTION_HOOKS_HIDE_MS,
   MAX_VIEW_ZOOM,
-  MIN_KNOLL_GAP,
   MIN_SECTION_HOOKS_HIDE_MS,
   MIN_VIEW_ZOOM,
 } from '../../shared/constants.ts';
 import { useSiteSettings } from '../hooks/useSiteSettings.ts';
+import { BoardColorField } from './BoardColorField.tsx';
+import { PackTightnessField } from './PackTightnessField.tsx';
 
 export function ViewZoomSettings({ onPackingCommit }: { onPackingCommit?: (gap: number) => void }) {
   const { settings, setSettings, save, error } = useSiteSettings();
@@ -19,7 +19,18 @@ export function ViewZoomSettings({ onPackingCommit }: { onPackingCommit?: (gap: 
 
   return (
     <div className="inspector-block">
-      <h2 style={{ fontSize: 18, marginBottom: 10 }}>View zoom</h2>
+      <BoardColorField
+        value={settings.boardColor}
+        onChange={(boardColor) => setSettings({ ...settings, boardColor })}
+        onCommit={(boardColor) => {
+          const next = { ...settings, boardColor };
+          setSettings(next);
+          void save(next).catch(() => {
+            /* keep local values; error is shown */
+          });
+        }}
+      />
+      <h2 style={{ fontSize: 18, margin: '22px 0 10px' }}>View zoom</h2>
       <p className="hint" style={{ margin: '0 0 12px' }}>
         100% fits the full board width. Higher values crop in from the sides so objects read larger.
       </p>
@@ -100,53 +111,19 @@ export function ViewZoomSettings({ onPackingCommit }: { onPackingCommit?: (gap: 
           }}
         />
       </label>
-      <h2 style={{ fontSize: 18, margin: '22px 0 10px' }}>Knoll spacing</h2>
-      <p className="hint" style={{ margin: '0 0 12px' }}>
-        Pack tightness controls how close objects sit when gravity settles. Drag an object or hit
-        Rearrange to apply.
-      </p>
-      <label className="range-field">
-        <header>
-          <span>Pack tightness</span>
-          <span>{settings.knollGap <= 24 ? 'tight' : settings.knollGap >= 120 ? 'loose' : `${settings.knollGap}px`}</span>
-        </header>
-        <input
-          type="range"
-          min={MIN_KNOLL_GAP}
-          max={MAX_KNOLL_GAP}
-          step={4}
-          value={MAX_KNOLL_GAP + MIN_KNOLL_GAP - settings.knollGap}
-          onChange={(event) => {
-            const inverted = MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number(event.target.value);
-            setSettings({ ...settings, knollGap: inverted });
-          }}
-          onPointerUp={(event) => {
-            const inverted =
-              MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number((event.currentTarget as HTMLInputElement).value);
-            const next = { ...settings, knollGap: inverted };
-            setSettings(next);
-            void save(next).catch(() => {
-              /* keep local values; error is shown */
-            });
-            onPackingCommit?.(inverted);
-          }}
-          onBlur={(event) => {
-            const inverted =
-              MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number((event.currentTarget as HTMLInputElement).value);
-            const next = { ...settings, knollGap: inverted };
-            setSettings(next);
-            void save(next).catch(() => {
-              /* keep local values; error is shown */
-            });
-            onPackingCommit?.(inverted);
-          }}
-        />
-        <p className="hint" style={{ margin: 0, display: 'flex', justifyContent: 'space-between' }}>
-          <span>tight</span>
-          <span>loose</span>
-        </p>
-      </label>
-      <label className="field">
+      <PackTightnessField
+        value={settings.knollGap}
+        onChange={(knollGap) => setSettings({ ...settings, knollGap })}
+        onCommit={(knollGap) => {
+          const next = { ...settings, knollGap };
+          setSettings(next);
+          void save(next).catch(() => {
+            /* keep local values; error is shown */
+          });
+          onPackingCommit?.(knollGap);
+        }}
+      />
+      <label className="field" style={{ marginTop: 16 }}>
         <span>Gravity</span>
         <select
           value={settings.knollGravity ? 'on' : 'off'}
@@ -177,7 +154,7 @@ export function ViewZoomSettings({ onPackingCommit }: { onPackingCommit?: (gap: 
             });
           }}
         >
-          <option value="grid">grid — snap to 90°</option>
+          <option value="grid">grid — flip 0°/90° to pack tight</option>
           <option value="radial">radial — long axis toward well</option>
           <option value="none">off — keep current angle</option>
         </select>

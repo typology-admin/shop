@@ -60,7 +60,7 @@ export async function exportInstagramPostPng(item: Item): Promise<void> {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not draw the post.');
 
-  ctx.fillStyle = '#c5c1b6';
+  ctx.fillStyle = '#bfbfbf';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   const pad = 100;
@@ -72,7 +72,7 @@ export async function exportInstagramPostPng(item: Item): Promise<void> {
   const h = img.naturalHeight * scale;
   ctx.drawImage(img, (canvas.width - w) / 2, pad + (maxH - h) / 2, w, h);
 
-  ctx.fillStyle = '#1c1b18';
+  ctx.fillStyle = '#222222';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (item.title.trim()) {

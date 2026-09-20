@@ -1,6 +1,6 @@
 import { Circle, Group, Line, Stage, Layer, Rect } from 'react-konva';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
+import { DEFAULT_BOARD_COLOR, PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 import type { GravityWell } from '../lib/wells.ts';
@@ -16,9 +16,11 @@ type Props = {
   mode: 'public' | 'admin';
   zoom?: number;
   selectedId?: string | null;
+  backgroundColor?: string;
   onSelect?: (id: string | null) => void;
   onCommit?: (id: string, patch: ItemPatch) => void;
   wells?: BoardWell[];
+  onAddAtWell?: (sectionId: string) => void;
   onDragStartItem?: (id: string) => void;
   onDragMoveItem?: (id: string, x: number, y: number) => void;
   onDragEndItem?: (id: string, x: number, y: number) => void;
@@ -48,9 +50,11 @@ export function Board({
   mode,
   zoom = 1,
   selectedId = null,
+  backgroundColor = DEFAULT_BOARD_COLOR,
   onSelect,
   onCommit,
   wells = [],
+  onAddAtWell,
   onDragStartItem,
   onDragMoveItem,
   onDragEndItem,
@@ -94,6 +98,7 @@ export function Board({
   const loadedCount = items.filter((item) => loaded[item.id]).length;
   const showProgress = items.length > 0 && loadedCount < items.length;
   const showWells = mode === 'admin' && wells.length > 0;
+  const canAddAtWell = Boolean(onAddAtWell);
 
   return (
     <div className="board-scroll" data-loop={copies > 1 ? String(copies) : undefined}>
@@ -116,7 +121,7 @@ export function Board({
             y={0}
             width={fit.canvasWidth}
             height={fit.canvasHeight * copies}
-            fill="#c5c1b6"
+            fill={backgroundColor}
             listening={false}
           />
           {activeCopies.map((copy) => (
@@ -141,30 +146,60 @@ export function Board({
           ))}
           {showWells
             ? wells.map((well) => (
-                <Group key={well.id} x={well.x} y={well.y} listening={false}>
+                <Group key={well.id} x={well.x} y={well.y}>
                   {[30, 60, 95].map((radius) => (
                     <Circle
                       key={radius}
                       radius={radius}
                       stroke={well.color}
                       strokeWidth={1.5}
-                      opacity={0.22}
+                      opacity={0.18}
                       listening={false}
                     />
                   ))}
-                  <Circle radius={9} fill={well.color} opacity={0.9} />
-                  <Line
-                    points={[-18, 0, 18, 0]}
-                    stroke={well.color}
-                    strokeWidth={1.5}
-                    listening={false}
-                  />
-                  <Line
-                    points={[0, -18, 0, 18]}
-                    stroke={well.color}
-                    strokeWidth={1.5}
-                    listening={false}
-                  />
+                  <Group
+                    listening={canAddAtWell}
+                    onMouseEnter={(event) => {
+                      if (!canAddAtWell) return;
+                      const stage = event.target.getStage();
+                      if (stage) stage.container().style.cursor = 'pointer';
+                    }}
+                    onMouseLeave={(event) => {
+                      const stage = event.target.getStage();
+                      if (stage) stage.container().style.cursor = 'default';
+                    }}
+                    onClick={(event) => {
+                      if (!canAddAtWell) return;
+                      event.cancelBubble = true;
+                      onAddAtWell?.(well.sectionId);
+                    }}
+                    onTap={(event) => {
+                      if (!canAddAtWell) return;
+                      event.cancelBubble = true;
+                      onAddAtWell?.(well.sectionId);
+                    }}
+                  >
+                    <Circle
+                      radius={22}
+                      fill="rgba(236, 236, 236, 0.88)"
+                      stroke="rgba(34, 34, 34, 0.16)"
+                      strokeWidth={1}
+                    />
+                    <Line
+                      points={[-8, 0, 8, 0]}
+                      stroke="#222222"
+                      strokeWidth={2}
+                      lineCap="round"
+                      listening={false}
+                    />
+                    <Line
+                      points={[0, -8, 0, 8]}
+                      stroke="#222222"
+                      strokeWidth={2}
+                      lineCap="round"
+                      listening={false}
+                    />
+                  </Group>
                 </Group>
               ))
             : null}

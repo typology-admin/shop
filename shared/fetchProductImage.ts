@@ -73,16 +73,31 @@ async function fetchImageBytes(imageUrl: string, referer?: string): Promise<Prod
   };
 }
 
+function isAmazonHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host.includes('amazon.') ||
+    host === 'amzn.to' ||
+    host.endsWith('.amzn.to') ||
+    host === 'a.co' ||
+    host.endsWith('.a.co')
+  );
+}
+
 export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
   const url = assertPublicHttpUrl(pageUrl);
-  const asin = extractAsin(url);
+  let resolved = url;
+  let asin = extractAsin(url);
 
   try {
     const page = await fetch(url.toString(), {
       headers: PRODUCT_FETCH_HEADERS,
       redirect: 'follow',
     });
-    if (page.url) assertPublicHttpUrl(page.url);
+    if (page.url) {
+      resolved = assertPublicHttpUrl(page.url);
+      asin = extractAsin(resolved) ?? asin;
+    }
     if (page.ok) {
       const contentType = page.headers.get('content-type') ?? '';
       if (looksLikeImage(contentType)) {
@@ -93,7 +108,7 @@ export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
           title: null,
           price: null,
           currency: null,
-          imageUrl: url.toString(),
+          imageUrl: resolved.toString(),
         };
       }
 
@@ -105,7 +120,10 @@ export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
       if (!blocked) {
         const meta = extractProductMeta(html);
         if (meta.image) {
-          const hero = await fetchImageBytes(resolveFetchedUrl(meta.image, url.toString()), `${url.origin}/`);
+          const hero = await fetchImageBytes(
+            resolveFetchedUrl(meta.image, resolved.toString()),
+            `${resolved.origin}/`,
+          );
           return {
             ...hero,
             title: meta.title,
@@ -120,12 +138,14 @@ export async function fetchProductHero(pageUrl: string): Promise<ProductHero> {
     // Fall through to Amazon image URLs when the product page is blocked.
   }
 
-  if (asin && /amazon\./i.test(url.hostname)) {
-    const fallbacks = [amazonWidgetImageUrl(url, asin), amazonCatalogImageUrl(asin)];
+  if (asin && isAmazonHost(resolved.hostname)) {
+    const market =
+      /amazon\./i.test(resolved.hostname) ? resolved : new URL('https://www.amazon.com/');
+    const fallbacks = [amazonWidgetImageUrl(market, asin), amazonCatalogImageUrl(asin)];
     let lastError: Error | null = null;
     for (const imageUrl of fallbacks) {
       try {
-        return await fetchImageBytes(imageUrl, `${url.origin}/`);
+        return await fetchImageBytes(imageUrl, `${market.origin}/`);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error('Could not download the product image.');
       }

@@ -54,16 +54,11 @@ export function ProductNode({
   useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node || !image) return;
-    // Public clicks can use the AABB hit region — alpha caches are expensive at board scale.
-    if (mode === 'public') {
-      node.clearCache();
-      node.getLayer()?.batchDraw();
-      return;
-    }
+    // Hit region follows visible PNG pixels so transparent padding is not clickable.
     node.cache({ pixelRatio: Math.min(1, 1 / Math.max(0.35, stageScale)) });
     node.drawHitFromCache(HIT_ALPHA_THRESHOLD);
     node.getLayer()?.batchDraw();
-  }, [image, mode, stageScale]);
+  }, [image, stageScale]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;

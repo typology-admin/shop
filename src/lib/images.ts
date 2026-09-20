@@ -27,6 +27,7 @@ export function forgetImageUrl(imagePath: string): void {
   const cached = blobUrlCache.get(imagePath);
   if (cached) URL.revokeObjectURL(cached);
   blobUrlCache.delete(imagePath);
+  void import('./itemMask.ts').then((mod) => mod.forgetFootprint(imagePath));
 }
 
 export async function resolveImageUrl(imagePath: string): Promise<string | null> {

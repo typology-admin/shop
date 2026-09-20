@@ -13,6 +13,7 @@ export type UserBoard = {
   wishlist_enabled: boolean;
   suggestions_enabled: boolean;
   og_image_path: string | null;
+  background_color: string;
   created_at: string;
   updated_at: string;
 };
@@ -82,7 +83,7 @@ export type BoardBundle = {
 };
 
 const BOARD_COLS =
-  'id, owner_id, title, slug, visibility, share_token, wishlist_enabled, suggestions_enabled, og_image_path, created_at, updated_at';
+  'id, owner_id, title, slug, visibility, share_token, wishlist_enabled, suggestions_enabled, og_image_path, background_color, created_at, updated_at';
 const SECTION_COLS = 'id, board_id, title, x, y, strength, sort_order, created_at';
 const ITEM_COLS =
   'id, board_id, section_id, url, title, price, currency, image_path, source_image_url, image_width, image_height, x, y, rotation, scale, locked, z_index, created_at, updated_at';
@@ -179,6 +180,7 @@ export async function updateBoard(
       | 'wishlist_enabled'
       | 'suggestions_enabled'
       | 'og_image_path'
+      | 'background_color'
     >
   >,
 ): Promise<UserBoard> {
@@ -317,7 +319,7 @@ export async function addItem(
       rotation: input.rotation ?? 0,
       scale: input.scale ?? 1,
       locked: input.locked ?? false,
-      z_index: input.z_index ?? Date.now(),
+      z_index: input.z_index ?? Math.floor(Date.now() / 1000),
     })
     .select(ITEM_COLS)
     .single();

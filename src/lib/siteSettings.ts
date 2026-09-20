@@ -1,4 +1,5 @@
 import {
+  DEFAULT_BOARD_COLOR,
   DEFAULT_DESKTOP_ZOOM,
   DEFAULT_KNOLL_GAP,
   DEFAULT_KNOLL_GRAVITY,
@@ -31,6 +32,7 @@ export type SiteSettings = {
   knollGap: number;
   knollGravity: boolean;
   knollRotation: KnollRotationMode;
+  boardColor: string;
 };
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -42,6 +44,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   knollGap: DEFAULT_KNOLL_GAP,
   knollGravity: DEFAULT_KNOLL_GRAVITY,
   knollRotation: DEFAULT_KNOLL_ROTATION,
+  boardColor: DEFAULT_BOARD_COLOR,
 };
 
 const LOCAL_KEY = 'typology-site-settings';
@@ -53,6 +56,7 @@ type SettingsRow = {
   contact_email: string;
   section_hooks_hide_ms?: number | string | null;
   knoll_gap?: number | string | null;
+  board_color?: string | null;
 };
 
 function asZoom(value: number | string | null | undefined, fallback: number): number {
@@ -108,6 +112,13 @@ function localKnollPrefs(): Pick<SiteSettings, 'knollGravity' | 'knollRotation'>
   }
 }
 
+function asBoardColor(value: unknown): string {
+  if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim())) {
+    return value.trim().toLowerCase();
+  }
+  return DEFAULT_BOARD_COLOR;
+}
+
 export function rowToSettings(row: SettingsRow): SiteSettings {
   const prefs = localKnollPrefs();
   return {
@@ -119,6 +130,7 @@ export function rowToSettings(row: SettingsRow): SiteSettings {
     knollGap: asGap(row.knoll_gap),
     knollGravity: prefs.knollGravity,
     knollRotation: prefs.knollRotation,
+    boardColor: asBoardColor(row.board_color),
   };
 }
 
@@ -136,6 +148,7 @@ function readLocal(): SiteSettings {
       knollGap: asGap(parsed.knollGap),
       knollGravity: asBool(parsed.knollGravity, DEFAULT_KNOLL_GRAVITY),
       knollRotation: asRotation(parsed.knollRotation),
+      boardColor: asBoardColor(parsed.boardColor),
     };
   } catch {
     return DEFAULT_SITE_SETTINGS;
@@ -157,7 +170,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
   if (!supabase) return readLocal();
   const { data, error } = await supabase
     .from('site_settings')
-    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
+    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap, board_color')
     .eq('id', 'shop')
     .maybeSingle();
   if (error || !data) return { ...DEFAULT_SITE_SETTINGS, ...localKnollPrefs() };
@@ -174,6 +187,7 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
     knollGap: clampKnollGap(settings.knollGap),
     knollGravity: Boolean(settings.knollGravity),
     knollRotation: asRotation(settings.knollRotation),
+    boardColor: asBoardColor(settings.boardColor),
   };
   writeLocal(next);
   if (!hasSupabaseConfig()) return next;
@@ -189,9 +203,10 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
       contact_email: next.contactEmail,
       section_hooks_hide_ms: next.sectionHooksHideMs,
       knoll_gap: next.knollGap,
+      board_color: next.boardColor,
       updated_at: new Date().toISOString(),
     })
-    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
+    .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap, board_color')
     .single();
   if (error) throw error;
   return { ...rowToSettings(data as SettingsRow), knollGravity: next.knollGravity, knollRotation: next.knollRotation };

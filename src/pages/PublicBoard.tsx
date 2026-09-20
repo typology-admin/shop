@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { Board } from '../components/Board.tsx';
@@ -10,7 +10,7 @@ import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useInfiniteWindowScroll } from '../hooks/useInfiniteWindowScroll.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useNetworkItems } from '../hooks/useNetworkItems.ts';
-import { useBoardZoom } from '../hooks/useSiteSettings.ts';
+import { useBoardZoom, useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { scrollTopForCanvasY, setActiveViewZoom } from '../lib/canvas.ts';
 import { jumpToSection, pickLandingSection } from '../lib/sections.ts';
 import type { Item } from '../lib/types.ts';
@@ -20,6 +20,7 @@ export function PublicBoard() {
   const { items: networkItems } = useNetworkItems();
   const { sections } = useBoardSections();
   const zoom = useBoardZoom();
+  const { settings } = useSiteSettings();
   const landed = useRef(false);
   const [params, setParams] = useSearchParams();
   const selectedId = params.get('item');
@@ -27,6 +28,14 @@ export function PublicBoard() {
   const looping = status === 'ready' && items.length > 0;
 
   useInfiniteWindowScroll(looping, PUBLIC_BOARD_COPIES);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--board', settings.boardColor);
+    return () => {
+      root.style.removeProperty('--board');
+    };
+  }, [settings.boardColor]);
 
   const openItem = useCallback(
     (item: Item | string) => {
@@ -125,6 +134,7 @@ export function PublicBoard() {
         items={items}
         mode="public"
         zoom={zoom}
+        backgroundColor={settings.boardColor}
         onSelect={(id) => {
           if (id) openItem(id);
         }}

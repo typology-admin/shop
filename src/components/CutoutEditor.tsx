@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   applyAutoCutout,
   compositeCutout,
+  floodCutAt,
   paintCutout,
   resetCutout,
   MAX_BG_TOLERANCE,
@@ -55,6 +56,9 @@ export function CutoutEditor({ session, doneLabel = 'Done', onDone, onCancel }: 
   const imageDataRef = useRef<ImageData | null>(null);
   const drawingRef = useRef(false);
   const lastRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(0);
+  const strokeSnapshotRef = useRef<Uint8ClampedArray | null>(null);
   const snapshotRef = useRef({
     alpha: session.alpha.slice(),
     tolerance: session.tolerance,
@@ -88,10 +92,11 @@ export function CutoutEditor({ session, doneLabel = 'Done', onDone, onCancel }: 
       canvas.height = pixelH;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#d8d4c8';
+    // Dark checker so mid-grey studio product shots stay readable.
+    ctx.fillStyle = '#1c1c1c';
     ctx.fillRect(0, 0, cssW, cssH);
     const size = 12;
-    ctx.fillStyle = '#eeeae0';
+    ctx.fillStyle = '#2e2e2e';
     for (let y = 0; y < cssH; y += size) {
       for (let x = 0; x < cssW; x += size) {
         if (((x / size + y / size) | 0) % 2 === 0) ctx.fillRect(x, y, size, size);
@@ -179,7 +184,10 @@ export function CutoutEditor({ session, doneLabel = 'Done', onDone, onCancel }: 
     canvas.setPointerCapture(event.pointerId);
     drawingRef.current = true;
     lastRef.current = null;
+    movedRef.current = 0;
+    strokeSnapshotRef.current = session.alpha.slice();
     const point = eventToImage(event, canvas, session.width, session.height);
+    pointerOriginRef.current = { x: point.x, y: point.y };
     strokeTo(point.x, point.y, point.scale);
   }
 
@@ -188,14 +196,33 @@ export function CutoutEditor({ session, doneLabel = 'Done', onDone, onCancel }: 
     const canvas = canvasRef.current;
     if (!canvas) return;
     const point = eventToImage(event, canvas, session.width, session.height);
+    const origin = pointerOriginRef.current;
+    if (origin) {
+      movedRef.current = Math.max(
+        movedRef.current,
+        Math.hypot(point.x - origin.x, point.y - origin.y),
+      );
+    }
     strokeTo(point.x, point.y, point.scale);
   }
 
   function handlePointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    const origin = pointerOriginRef.current;
+    // Short click with Cut punches enclosed leftover background (ring / leash holes).
+    if (brush === 'cut' && origin && movedRef.current < 6 && strokeSnapshotRef.current) {
+      session.alpha = strokeSnapshotRef.current;
+      floodCutAt(session, origin.x, origin.y, Math.max(tolerance, 36));
+      syncSource();
+      redraw();
+    }
     drawingRef.current = false;
     lastRef.current = null;
-    if (canvasRef.current?.hasPointerCapture(event.pointerId)) {
-      canvasRef.current.releasePointerCapture(event.pointerId);
+    pointerOriginRef.current = null;
+    strokeSnapshotRef.current = null;
+    movedRef.current = 0;
+    if (canvas?.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
     }
   }
 
@@ -228,11 +255,18 @@ export function CutoutEditor({ session, doneLabel = 'Done', onDone, onCancel }: 
   }
 
   return createPortal(
-    <div className="cutout-editor-backdrop">
+    <div
+      className="cutout-editor-backdrop"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <div className="cutout-editor" role="dialog" aria-labelledby="cutout-editor-title">
         <header className="cutout-editor-head">
           <h2 id="cutout-editor-title">Edit cutout</h2>
-          <p>Keep restores highlights the auto-cut ate. Cut removes leftover shadows.</p>
+          <p>
+            Click inside a leftover hole (ring, leash loop) to punch it out. Drag Cut to erase, Keep
+            to restore.
+          </p>
         </header>
         <canvas
           ref={canvasRef}

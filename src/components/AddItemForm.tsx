@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { beginCutout, finalizeCutout, type CutoutSession, type PreparedImage } from '../lib/cutout.ts';
 import { inferStore } from '../lib/images.ts';
 import { fetchProductHero } from '../lib/productImage.ts';
+import { BusyOverlay } from './BusyOverlay.tsx';
 import { CutoutEditor } from './CutoutEditor.tsx';
 import { PngDropzone } from './PngDropzone.tsx';
 
@@ -79,7 +80,7 @@ export function AddItemForm({
   async function handleFile(next: File) {
     const id = (generation.current += 1);
     setLocalError(null);
-    setWorking('Cutting background…');
+    setWorking('Removing background…');
     try {
       const cutout = await beginCutout(next, next.name);
       if (id !== generation.current) return;
@@ -107,7 +108,7 @@ export function AddItemForm({
     try {
       const hero = await fetchProductHero(url, accessToken);
       if (id !== generation.current) throw new Error('Cancelled.');
-      setWorking('Cutting background…');
+      setWorking('Removing background…');
       const cutout = await beginCutout(hero.blob, 'product.png');
       if (id !== generation.current) throw new Error('Cancelled.');
       sourceRef.current = 'url';
@@ -200,7 +201,8 @@ export function AddItemForm({
   const locked = busy || Boolean(working);
 
   return (
-    <form onSubmit={(event) => void handleSubmit(event)}>
+    <form className="busy-host" onSubmit={(event) => void handleSubmit(event)}>
+      {working ? <BusyOverlay message={working} /> : null}
       <PngDropzone
         disabled={locked}
         onFile={(next) => void handleFile(next)}
@@ -307,7 +309,6 @@ export function AddItemForm({
         <p className="field-hint">Comma-separated. Used by public search.</p>
       </label>
 
-      {working ? <p className="form-status">{working}</p> : null}
       {message ? <p className="form-error">{message}</p> : null}
 
       <label className="check-field">

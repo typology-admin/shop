@@ -1,11 +1,8 @@
 import { prepareItemImage, type PreparedImage } from './cutout.ts';
 
+/** Fast flood-fill cutout (same path as admin). Product photos usually sit on a light studio ground. */
 export async function removeBackground(source: Blob, name = 'item.png'): Promise<PreparedImage> {
-  try {
-    const { removeBackground: imglyRemove } = await import('@imgly/background-removal');
-    const blob = await imglyRemove(source, { output: { format: 'image/png' } });
-    return prepareItemImage(blob, name);
-  } catch {
-    return prepareItemImage(source, name);
-  }
+  return prepareItemImage(source, name);
 }
+
+export type { PreparedImage };

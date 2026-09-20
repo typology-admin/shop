@@ -6,7 +6,7 @@ Living reference for the public shop (landing board) and admin UI. Source of tru
 
 ## Brand feel
 
-Warm, quiet, material. The board is a linen-grey stage; UI floats on frosted paper. Lowercase labels. Pills everywhere. No purple gradients, no glow stacks, no dashboard chrome. Brand name is a first-class signal on empty/loading states (`typology network`), not a tiny nav eyebrow.
+Quiet monochrome. The board is staged on `#bfbfbf` greys; UI floats on lighter frost. Lowercase labels. Pills everywhere. No purple gradients, no glow stacks, no dashboard chrome. Brand name is a first-class signal on empty/loading states (`typology network`), not a tiny nav eyebrow.
 
 ---
 
@@ -14,27 +14,27 @@ Warm, quiet, material. The board is a linen-grey stage; UI floats on frosted pap
 
 | Token | Hex | Role |
 | --- | --- | --- |
-| `--board` | `#c5c1b6` | Page / canvas ground |
-| `--board-deep` | `#b9b4a8` | Slightly deeper board tone |
-| `--paper` | `#efece3` | Surfaces, filled buttons text, frosted panels |
-| `--paper-2` | `#e4e0d5` | Nested surface / hover fills |
-| `--ink` | `#1c1b18` | Primary text, filled buttons, focus |
-| `--ink-muted` | `#5c594f` | Secondary text, hints, idle icons |
-| `--line` | `#1c1b18` | Hairline rules (often at full ink) |
+| `--board` | `#bfbfbf` | Page / canvas ground (family center) |
+| `--board-deep` | `#a8a8a8` | Slightly deeper board tone |
+| `--paper` | `#ececec` | Surfaces, filled buttons text, frosted panels |
+| `--paper-2` | `#d6d6d6` | Nested surface / hover fills |
+| `--ink` | `#222222` | Primary text, filled buttons, focus |
+| `--ink-muted` | `#6b6b6b` | Secondary text, hints, idle icons |
+| `--line` | `#222222` | Hairline rules (often at full ink) |
 | `--danger` | `#8f2d16` | Destructive actions / errors |
-| `--focus` | `#1c1b18` | Focus-visible ring |
+| `--focus` | `#222222` | Focus-visible ring |
 
 ### Transparent recipes (use these, don’t invent new ones)
 
 | Use | Fill | Border | Blur |
 | --- | --- | --- | --- |
-| Chrome pill / search | `rgba(255,255,255,0.22)` | `rgba(28,27,24,0.16)` | `blur(18px) saturate(1.45)` |
-| Chrome pill hover / open | `rgba(255,255,255,0.46)` | `rgba(28,27,24,0.28)` | same |
-| Admin bar | `rgba(239,236,227,0.92)` | none | `blur(10px)` |
-| Admin tools rail | `rgba(239,236,227,0.55)` | transparent | `blur(28px) saturate(1.2)` |
-| Admin panel body | `rgba(239,236,227,0.72)` | transparent | `blur(40px) saturate(1.25)` |
-| Footer overlay | `rgba(197,193,182,0.78)` | — | `blur(18px) saturate(1.2)` |
-| Ghost hover | `rgba(28,27,24,0.06–0.08)` | — | — |
+| Chrome pill / search | `rgba(255,255,255,0.22)` | `rgba(34,34,34,0.16)` | `blur(18px) saturate(1.45)` |
+| Chrome pill hover / open | `rgba(255,255,255,0.46)` | `rgba(34,34,34,0.28)` | same |
+| Admin bar | `rgba(236,236,236,0.92)` | none | `blur(10px)` |
+| Admin tools rail | `rgba(236,236,236,0.55)` | transparent | `blur(28px) saturate(1.2)` |
+| Admin panel body | `rgba(236,236,236,0.72)` | transparent | `blur(40px) saturate(1.25)` |
+| Footer overlay | `rgba(191,191,191,0.78)` | — | `blur(18px) saturate(1.2)` |
+| Ghost hover | `rgba(34,34,34,0.06–0.08)` | — | — |
 
 Well / gravity accent colors (admin canvas only): `#c8553d`, `#3d7ea6`, `#5b8c5a`, `#b08d2f`, `#7a5aa6`.
 

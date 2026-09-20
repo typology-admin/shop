@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AccountBar } from '../components/AccountBar.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { fetchPublicProfile, type Profile } from '../lib/profile.ts';
@@ -8,6 +9,7 @@ import { listPublicBoards, type UserBoard } from '../lib/userBoards.ts';
 export function UserProfile() {
   const { username = '' } = useParams();
   const auth = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [boards, setBoards] = useState<UserBoard[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -49,22 +51,17 @@ export function UserProfile() {
   }, [profile]);
 
   const nav = (
-    <header className="account-bar">
-      <Link className="account-bar-brand" to="/">
-        typology network
-      </Link>
-      <div className="account-bar-actions">
-        {auth.session ? (
-          <Link className="btn btn-ghost" to="/me">
-            {auth.profile?.username ? `@${auth.profile.username}` : 'account'}
-          </Link>
-        ) : (
-          <Link className="btn btn-ghost" to="/login">
-            Sign in
-          </Link>
-        )}
-      </div>
-    </header>
+    <AccountBar
+      email={auth.session ? auth.email : null}
+      signedIn={Boolean(auth.session)}
+      onSignOut={
+        auth.session
+          ? () => {
+              void auth.signOut().then(() => navigate('/login'));
+            }
+          : undefined
+      }
+    />
   );
 
   if (status === 'loading') {

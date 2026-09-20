@@ -1,29 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { DEFAULT_KNOLL_GAP, DEFAULT_KNOLL_ROTATION } from '../../shared/constants.ts';
+import { DEFAULT_BOARD_COLOR, DEFAULT_KNOLL_GAP, DEFAULT_KNOLL_ROTATION, MAX_KNOLL_GAP, MIN_KNOLL_GAP } from '../../shared/constants.ts';
 import { AddUserItemDialog } from '../components/AddUserItemDialog.tsx';
+import { AdminToolsRail, type ToolsTab } from '../components/AdminToolsRail.tsx';
 import { Board } from '../components/Board.tsx';
+import { BoardColorField } from '../components/BoardColorField.tsx';
+import { BusyOverlay } from '../components/BusyOverlay.tsx';
+import { CutoutEditor } from '../components/CutoutEditor.tsx';
 import { ShareBoardDialog } from '../components/ShareBoardDialog.tsx';
+import { UserSectionPanel } from '../components/UserSectionPanel.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { useGravitySettle } from '../hooks/useGravitySettle.ts';
 import { useBoardZoom } from '../hooks/useSiteSettings.ts';
-import { openAffiliate } from '../lib/images.ts';
+import { beginCutout, finalizeCutout, type CutoutSession } from '../lib/cutout.ts';
+import { fetchImageBlob, forgetImageUrl, openAffiliate } from '../lib/images.ts';
+import { uploadPng } from '../lib/items.ts';
+import { forgetSharedProductImage } from '../lib/productImageCache.ts';
 import { fetchPublicProfile } from '../lib/profile.ts';
 import { toCanvasItem, userWells } from '../lib/userBoardMap.ts';
 import type { NewItemInput } from '../components/AddUserItemDialog.tsx';
 import {
   addItem,
-  addSection,
   claimItem,
   deleteItem,
-  deleteSection,
+  itemImageSrc,
   loadBoardBySlug,
   loadSharedBoard,
   nearestSectionId,
   suggestItem,
   updateBoard,
   updateItem,
-  updateSection,
   rotateShareToken,
   type BoardVisibility,
   type UserBoard,
@@ -33,6 +39,18 @@ import {
 } from '../lib/userBoards.ts';
 
 type SaveState = 'saved' | 'saving' | 'error';
+
+const PACK_GAP_KEY = 'knoll-user-pack-gap';
+
+function readPackGap(): number {
+  try {
+    const raw = Number(localStorage.getItem(PACK_GAP_KEY));
+    if (!Number.isFinite(raw)) return DEFAULT_KNOLL_GAP;
+    return Math.max(MIN_KNOLL_GAP, Math.min(MAX_KNOLL_GAP, Math.round(raw)));
+  } catch {
+    return DEFAULT_KNOLL_GAP;
+  }
+}
 
 export function UserBoardPage() {
   const { username = '', slug = '', token = '' } = useParams();
@@ -48,8 +66,14 @@ export function UserBoardPage() {
   const [save, setSave] = useState<SaveState>('saved');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [addSectionId, setAddSectionId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [cutoutSession, setCutoutSession] = useState<CutoutSession | null>(null);
+  const [cutoutWorking, setCutoutWorking] = useState<string | null>(null);
+  const [toolsTab, setToolsTab] = useState<ToolsTab | null>(null);
+  const [arrangingId, setArrangingId] = useState<string | null>(null);
+  const [knollGap, setKnollGap] = useState(readPackGap);
   const [claimName, setClaimName] = useState('');
   const [suggestNote, setSuggestNote] = useState('');
   const [suggestUrl, setSuggestUrl] = useState('');
@@ -101,6 +125,23 @@ export function UserBoardPage() {
     if (board) document.title = `${board.title} — typology network`;
   }, [board]);
 
+  const boardColor = board?.background_color || DEFAULT_BOARD_COLOR;
+
+  useEffect(() => {
+    if (!board) return;
+    const root = document.documentElement;
+    const previous = root.style.getPropertyValue('--board');
+    root.style.setProperty('--board', boardColor);
+    return () => {
+      if (previous) root.style.setProperty('--board', previous);
+      else root.style.removeProperty('--board');
+    };
+  }, [board, boardColor]);
+
+  function handleToolsTab(tab: ToolsTab) {
+    setToolsTab((current) => (current === tab ? null : tab));
+  }
+
   const flush = useCallback(async () => {
     const entries = [...pending.current.entries()];
     pending.current.clear();
@@ -134,7 +175,7 @@ export function UserBoardPage() {
   const gravity = useGravitySettle({
     items: canvasItems,
     wells,
-    gap: DEFAULT_KNOLL_GAP,
+    gap: knollGap,
     gravity: true,
     rotation: DEFAULT_KNOLL_ROTATION,
     enabled: owner && wells.length > 0,
@@ -164,11 +205,13 @@ export function UserBoardPage() {
     if (!board) return;
     setAdding(true);
     try {
+      const section =
+        sections.find((row) => row.id === (input.section_id ?? addSectionId)) ?? sections[0] ?? null;
       const created = await addItem(board.id, {
         ...input,
-        x: input.x ?? (sections[0]?.x ?? 1200),
-        y: input.y ?? (sections[0]?.y ?? 900),
-        section_id: input.section_id ?? sections[0]?.id ?? null,
+        x: input.x ?? section?.x ?? 1200,
+        y: input.y ?? section?.y ?? 900,
+        section_id: input.section_id ?? section?.id ?? null,
       });
       setItems((list) => [...list, created]);
     } finally {
@@ -176,18 +219,53 @@ export function UserBoardPage() {
     }
   }
 
-  async function onAddSection() {
-    if (!board) return;
-    const created = await addSection(board.id, {
-      title: `section ${sections.length + 1}`,
-      y: 900 + sections.length * 800,
-      sort_order: sections.length,
-    });
-    setSections((list) => [...list, created]);
-  }
-
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const selectedClaimed = claims.some((claim) => claim.item_id === selectedId);
+
+  async function openCutout() {
+    if (!selected) return;
+    const src = itemImageSrc(selected);
+    if (!src) {
+      setError('This item has no photo to edit.');
+      return;
+    }
+    setCutoutWorking('Opening cutout…');
+    setError(null);
+    try {
+      const blob = await fetchImageBlob(src);
+      const next = await beginCutout(blob, 'item.png');
+      setCutoutSession(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open that cutout.');
+    } finally {
+      setCutoutWorking(null);
+    }
+  }
+
+  async function saveCutout() {
+    if (!selected || !cutoutSession) return;
+    setCutoutWorking('Saving cutout…');
+    setError(null);
+    try {
+      const prepared = await finalizeCutout(cutoutSession);
+      const oldPath = selected.image_path || '';
+      forgetImageUrl(oldPath);
+      forgetSharedProductImage(oldPath);
+      const uploaded = await uploadPng(prepared.file, auth.session?.access_token ?? null);
+      const patch = {
+        image_path: uploaded.path,
+        image_width: uploaded.width,
+        image_height: uploaded.height,
+      };
+      await updateItem(selected.id, patch);
+      setItems((list) => list.map((row) => (row.id === selected.id ? { ...row, ...patch } : row)));
+      setCutoutSession(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the cutout.');
+    } finally {
+      setCutoutWorking(null);
+    }
+  }
 
   if (status === 'loading') {
     return (
@@ -218,55 +296,146 @@ export function UserBoardPage() {
 
   return (
     <div className="user-board-page">
-      <header className="account-bar">
-        <Link className="account-bar-brand" to={username ? `/u/${ownerName}` : '/me'}>
-          {ownerName} / {board.slug}
-        </Link>
-        <div className="account-bar-actions">
-          <span className="account-bar-meta">
+      {owner ? (
+        <header className="admin-bar">
+          <Link className="admin-bar-brand" to={username ? `/u/${ownerName}` : '/me'}>
+            {ownerName} / {board.slug}
+          </Link>
+          <span className="admin-bar-meta">
             {save === 'saving' ? 'Saving…' : save === 'error' ? 'Save failed' : 'Saved'}
           </span>
-          {owner ? (
-            <>
-              <button type="button" className="btn btn-ghost" onClick={() => void onAddSection()}>
-                Add section
-              </button>
-              <button type="button" className="btn" onClick={() => setAddOpen(true)}>
-                Add item
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => setShareOpen(true)}>
-                Share
-              </button>
-            </>
-          ) : (
-            <Link className="btn btn-ghost" to="/login">
-              Sign in
-            </Link>
-          )}
-        </div>
-      </header>
+          <div className="admin-bar-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => setShareOpen(true)}>
+              share
+            </button>
+          </div>
+        </header>
+      ) : (
+        <header className="user-board-chrome">
+          <Link className="chrome-pill" to={username ? `/u/${ownerName}` : '/'}>
+            {ownerName}
+          </Link>
+          <Link className="chrome-pill" to="/login">
+            sign in
+          </Link>
+        </header>
+      )}
 
-      {owner && sections.length > 0 ? (
-        <div className="user-section-rail">
-          {sections.map((section) => (
-            <label key={section.id} className="user-section-chip">
-              <input
-                value={section.title}
-                onChange={(event) => {
-                  const title = event.target.value;
-                  setSections((list) => list.map((row) => (row.id === section.id ? { ...row, title } : row)));
-                  void updateSection(section.id, { title });
-                }}
-              />
-              <button type="button" className="text-btn" onClick={() => {
-                void deleteSection(section.id);
-                setSections((list) => list.filter((row) => row.id !== section.id));
-              }}>
-                ×
-              </button>
-            </label>
-          ))}
-        </div>
+      {owner ? (
+        <>
+          {toolsTab ? (
+            <button
+              type="button"
+              className="panel-backdrop"
+              aria-label="Close panel"
+              onClick={() => setToolsTab(null)}
+            />
+          ) : null}
+          <aside className={`admin-panel${toolsTab ? '' : ' is-rail-only'}`}>
+            <AdminToolsRail
+              active={toolsTab}
+              itemActive={Boolean(selected)}
+              onSelect={handleToolsTab}
+            />
+            {toolsTab ? (
+              <div className="admin-panel-body">
+                {toolsTab === 'item' ? (
+                  selected ? (
+                    <div className="inspector-block busy-host">
+                      {cutoutWorking ? <BusyOverlay message={cutoutWorking} /> : null}
+                      <h2>{selected.title || 'Item'}</h2>
+                      <label className="field">
+                        <span>Title</span>
+                        <input
+                          value={selected.title}
+                          onChange={(event) => sync(selected.id, { title: event.target.value })}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>URL</span>
+                        <input
+                          value={selected.url}
+                          onChange={(event) => sync(selected.id, { url: event.target.value })}
+                        />
+                      </label>
+                      <div className="btn-row">
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={Boolean(cutoutWorking) || !itemImageSrc(selected)}
+                          onClick={() => void openCutout()}
+                        >
+                          Edit cutout
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => {
+                            void deleteItem(selected.id);
+                            setItems((list) => list.filter((row) => row.id !== selected.id));
+                            setSelectedId(null);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <h2>Add item</h2>
+                      <p className="hint">Paste a product URL or upload a photo to place an object.</p>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => {
+                          setAddSectionId(null);
+                          setAddOpen(true);
+                        }}
+                      >
+                        add item
+                      </button>
+                    </>
+                  )
+                ) : null}
+                {toolsTab === 'sections' ? (
+                  <UserSectionPanel
+                    boardId={board.id}
+                    sections={sections}
+                    zoom={zoom}
+                    arrangingId={arrangingId}
+                    onChange={setSections}
+                    knollGap={knollGap}
+                    onKnollGapChange={setKnollGap}
+                    onKnollGapCommit={(gap) => {
+                      setKnollGap(gap);
+                      try {
+                        localStorage.setItem(PACK_GAP_KEY, String(gap));
+                      } catch {
+                        /* ignore */
+                      }
+                      void gravity.kickSettle();
+                    }}
+                    onRearrange={(section) => {
+                      setArrangingId(section.id);
+                      void gravity.kickSettle({ reseeds: true }).finally(() => setArrangingId(null));
+                    }}
+                  />
+                ) : null}
+                {toolsTab === 'view' ? (
+                  <BoardColorField
+                    value={boardColor}
+                    onChange={(background_color) => {
+                      setBoard((current) => (current ? { ...current, background_color } : current));
+                    }}
+                    onCommit={(background_color) => {
+                      void updateBoard(board.id, { background_color }).then(setBoard);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </aside>
+        </>
       ) : null}
 
       <Board
@@ -274,9 +443,20 @@ export function UserBoardPage() {
         mode={owner ? 'admin' : 'public'}
         zoom={zoom}
         selectedId={selectedId}
+        backgroundColor={boardColor}
         wells={owner ? wells : []}
+        onAddAtWell={
+          owner
+            ? (sectionId) => {
+                setAddSectionId(sectionId);
+                setAddOpen(true);
+                setToolsTab('item');
+              }
+            : undefined
+        }
         onSelect={(id) => {
           setSelectedId(id);
+          if (owner && id) setToolsTab('item');
           if (!owner && id) {
             const item = items.find((row) => row.id === id);
             if (item?.url) openAffiliate(item.url);
@@ -304,31 +484,6 @@ export function UserBoardPage() {
           void gravity.kickSettle();
         }}
       />
-
-      {selected && owner ? (
-        <aside className="user-inspector">
-          <label className="field">
-            <span>Title</span>
-            <input
-              value={selected.title}
-              onChange={(event) => queue(selected.id, { title: event.target.value })}
-            />
-          </label>
-          <label className="field">
-            <span>URL</span>
-            <input value={selected.url} onChange={(event) => queue(selected.id, { url: event.target.value })} />
-          </label>
-          <div className="btn-row">
-            <button type="button" className="btn btn-danger" onClick={() => {
-              void deleteItem(selected.id);
-              setItems((list) => list.filter((row) => row.id !== selected.id));
-              setSelectedId(null);
-            }}>
-              Remove
-            </button>
-          </div>
-        </aside>
-      ) : null}
 
       {selected && !owner && board.wishlist_enabled ? (
         <aside className="user-inspector">
@@ -413,12 +568,25 @@ export function UserBoardPage() {
         <p className="affiliate-disclosure">This board may contain affiliate links. We may earn a commission.</p>
       ) : null}
 
+      {cutoutSession ? (
+        <CutoutEditor
+          session={cutoutSession}
+          doneLabel="Save cutout"
+          onDone={() => void saveCutout()}
+          onCancel={() => setCutoutSession(null)}
+        />
+      ) : null}
+
       <AddUserItemDialog
         open={addOpen}
         busy={adding}
         accessToken={auth.session?.access_token ?? null}
         sections={sections}
-        onClose={() => setAddOpen(false)}
+        defaultSectionId={addSectionId}
+        onClose={() => {
+          setAddOpen(false);
+          setAddSectionId(null);
+        }}
         onSubmit={onAdd}
       />
       {shareOpen && ownerName ? (

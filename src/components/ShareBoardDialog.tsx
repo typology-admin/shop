@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { BoardVisibility, UserBoard } from '../lib/userBoards.ts';
 
 type Props = {
@@ -14,6 +14,11 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.add('account-modal-open');
+    return () => document.documentElement.classList.remove('account-modal-open');
+  }, []);
 
   const publicUrl = `${window.location.origin}/u/${username}/${board.slug}`;
   const unlistedUrl = board.share_token ? `${window.location.origin}/s/${board.share_token}` : '';
@@ -56,11 +61,9 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
   return (
     <div className="account-modal-backdrop" onClick={onClose}>
       <div className="account-modal" role="dialog" aria-label="Share" onClick={(e) => e.stopPropagation()}>
-        <p className="auth-kicker">Share</p>
-        <h2 className="wordmark-ui" style={{ fontSize: 28, margin: '0 0 16px' }}>
-          {board.title}
-        </h2>
-        <div className="btn-row" style={{ marginBottom: 16 }}>
+        <h2>Share</h2>
+        <p className="lede">{board.title}</p>
+        <div className="btn-row">
           {(['private', 'unlisted', 'public'] as const).map((value) => (
             <button
               key={value}
@@ -76,7 +79,7 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
         {board.visibility === 'private' ? (
           <p className="hint">Only you can open this board.</p>
         ) : (
-          <p className="lede" style={{ marginBottom: 12 }}>
+          <p className="lede">
             {link}
           </p>
         )}
@@ -95,25 +98,21 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
             Close
           </button>
         </div>
-        <label className="field">
-          <span>
-            <input
-              type="checkbox"
-              checked={board.wishlist_enabled}
-              onChange={(event) => void onFlags({ wishlist_enabled: event.target.checked })}
-            />{' '}
-            Wishlist claims
-          </span>
+        <label className="field field-check">
+          <input
+            type="checkbox"
+            checked={board.wishlist_enabled}
+            onChange={(event) => void onFlags({ wishlist_enabled: event.target.checked })}
+          />
+          <span>Wishlist claims</span>
         </label>
-        <label className="field">
-          <span>
-            <input
-              type="checkbox"
-              checked={board.suggestions_enabled}
-              onChange={(event) => void onFlags({ suggestions_enabled: event.target.checked })}
-            />{' '}
-            Gift suggestions
-          </span>
+        <label className="field field-check">
+          <input
+            type="checkbox"
+            checked={board.suggestions_enabled}
+            onChange={(event) => void onFlags({ suggestions_enabled: event.target.checked })}
+          />
+          <span>Gift suggestions</span>
         </label>
         {error ? <p className="form-error">{error}</p> : null}
       </div>

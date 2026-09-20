@@ -44,10 +44,10 @@ body.is-network {
   align-items: center;
   justify-content: center;
   height: 36px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   background: rgba(255, 255, 255, 0.22);
   color: var(--ink);
-  box-shadow: 0 1px 2px rgba(28, 27, 24, 0.05);
+  box-shadow: 0 1px 2px rgba(34, 34, 34, 0.05);
   backdrop-filter: blur(18px) saturate(1.45);
   -webkit-backdrop-filter: blur(18px) saturate(1.45);
   text-decoration: none;
@@ -79,7 +79,7 @@ body.is-network {
 .chrome-search-toggle:hover,
 .chrome-search-toggle.is-open {
   background: rgba(255, 255, 255, 0.46);
-  border-color: rgba(28, 27, 24, 0.28);
+  border-color: rgba(34, 34, 34, 0.28);
 }
 
 .chrome-contact {
@@ -93,9 +93,9 @@ body.is-network {
   right: 0;
   min-width: 140px;
   border-radius: 16px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   background: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
+  box-shadow: 0 12px 40px rgba(34, 34, 34, 0.1);
   backdrop-filter: blur(40px) saturate(1.6);
   -webkit-backdrop-filter: blur(40px) saturate(1.6);
   padding: 6px;
@@ -141,10 +141,10 @@ body.is-network {
   height: 36px;
   width: 220px;
   border-radius: 999px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   background: rgba(255, 255, 255, 0.22);
   padding: 0 12px 0 34px;
-  box-shadow: 0 1px 2px rgba(28, 27, 24, 0.05);
+  box-shadow: 0 1px 2px rgba(34, 34, 34, 0.05);
   backdrop-filter: blur(18px) saturate(1.45);
   -webkit-backdrop-filter: blur(18px) saturate(1.45);
 }
@@ -176,9 +176,9 @@ body.is-network {
   right: 0;
   width: 260px;
   border-radius: 16px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   background: rgba(255, 255, 255, 0.42);
-  box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
+  box-shadow: 0 12px 40px rgba(34, 34, 34, 0.1);
   backdrop-filter: blur(32px) saturate(1.5);
   -webkit-backdrop-filter: blur(32px) saturate(1.5);
   padding: 6px;
@@ -205,7 +205,7 @@ body.is-network {
   align-items: center;
   height: 26px;
   padding: 0 10px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.45);
   color: var(--ink);
@@ -226,7 +226,7 @@ body.is-network {
   background: rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(24px) saturate(1.45);
   -webkit-backdrop-filter: blur(24px) saturate(1.45);
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 8px 10px;
   gap: 2px;
 }
@@ -472,7 +472,7 @@ body.is-network {
   height: 32px;
   min-height: 32px;
   padding: 0 14px;
-  border: 1px solid rgba(28, 27, 24, 0.16);
+  border: 1px solid rgba(34, 34, 34, 0.16);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.45);
   color: var(--ink);
@@ -552,9 +552,9 @@ body.is-network {
     gap: 8px;
     padding: 10px;
     border-radius: 20px;
-    border: 1px solid rgba(28, 27, 24, 0.16);
+    border: 1px solid rgba(34, 34, 34, 0.16);
     background: rgba(255, 255, 255, 0.42);
-    box-shadow: 0 12px 40px rgba(28, 27, 24, 0.1);
+    box-shadow: 0 12px 40px rgba(34, 34, 34, 0.1);
     backdrop-filter: blur(32px) saturate(1.5);
     -webkit-backdrop-filter: blur(32px) saturate(1.5);
   }

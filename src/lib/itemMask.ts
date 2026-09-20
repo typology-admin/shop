@@ -1,13 +1,20 @@
-import { HIT_ALPHA_THRESHOLD } from '../../shared/constants.ts';
 import { fetchImageBlob } from './images.ts';
 
 /** Downscale for mask extraction — keeps alpha sampling fast and dense. */
 const MASK_MAX_EDGE = 192;
-const SAMPLE = 2;
+const SAMPLE = 1;
+const MAX_HULL = 24;
+/** Include soft cutout fringes so packing doesn't sit inside visible edges. */
+const PACK_ALPHA_THRESHOLD = 4;
+/** Expand solid mask by this many mask pixels before building the hull. */
+const MASK_DILATE = 1;
+const CACHE_VERSION = 'v2';
 
 export type ItemFootprint = {
   /** Local coords relative to image center, in source (unscaled) pixels. */
   points: Array<{ x: number; y: number }>;
+  /** Convex hull of visible pixels (same local space). */
+  hull: Array<{ x: number; y: number }>;
   minX: number;
   maxX: number;
   minY: number;
@@ -18,6 +25,57 @@ const cache = new Map<string, ItemFootprint>();
 
 export function clearFootprintCache(): void {
   cache.clear();
+}
+
+function cross(
+  o: { x: number; y: number },
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+/** Andrew's monotone chain; returns CCW hull. */
+export function convexHull(points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
+  if (points.length <= 2) return points.slice();
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const lower: Array<{ x: number; y: number }> = [];
+  for (const p of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+  const upper: Array<{ x: number; y: number }> = [];
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const p = sorted[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  lower.pop();
+  upper.pop();
+  const hull = lower.concat(upper);
+  if (hull.length <= MAX_HULL) return hull;
+  // Keep silhouette extent while capping SAT cost.
+  const step = hull.length / MAX_HULL;
+  const simplified: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < MAX_HULL; i += 1) {
+    simplified.push(hull[Math.min(hull.length - 1, Math.floor(i * step))]!);
+  }
+  return simplified;
+}
+
+function rectHull(width: number, height: number): Array<{ x: number; y: number }> {
+  const left = -width / 2;
+  const top = -height / 2;
+  return [
+    { x: left, y: top },
+    { x: left + width, y: top },
+    { x: left + width, y: top + height },
+    { x: left, y: top + height },
+  ];
 }
 
 export function aabbFootprint(width: number, height: number): ItemFootprint {
@@ -32,6 +90,7 @@ export function aabbFootprint(width: number, height: number): ItemFootprint {
   }
   return {
     points: points.length ? points : [{ x: 0, y: 0 }],
+    hull: rectHull(width, height),
     minX: left,
     maxX: left + width,
     minY: top,
@@ -55,30 +114,38 @@ export function footprintFromImageData(
   const cx = width / 2;
   const cy = height / 2;
 
-  // Mark solid cells, then fill spans per row so thin silhouettes stay solid.
   const solid = new Uint8Array(width * height);
-  let solidCount = 0;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      if ((data.data[(y * width + x) * 4 + 3] ?? 0) > HIT_ALPHA_THRESHOLD) {
+      if ((data.data[(y * width + x) * 4 + 3] ?? 0) > PACK_ALPHA_THRESHOLD) {
         solid[y * width + x] = 1;
-        solidCount += 1;
       }
     }
   }
 
-  if (solidCount < 8) return aabbFootprint(sourceWidth, sourceHeight);
-
-  for (let y = 0; y < height; y += 1) {
-    let rowMin = -1;
-    let rowMax = -1;
-    for (let x = 0; x < width; x += 1) {
-      if (!solid[y * width + x]) continue;
-      if (rowMin < 0) rowMin = x;
-      rowMax = x;
+  // Dilate so feathered / anti-aliased edges stay inside the collision hull.
+  let marked = solid;
+  if (MASK_DILATE > 0) {
+    const next = solid.slice();
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!solid[y * width + x]) continue;
+        for (let dy = -MASK_DILATE; dy <= MASK_DILATE; dy += 1) {
+          for (let dx = -MASK_DILATE; dx <= MASK_DILATE; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            next[ny * width + nx] = 1;
+          }
+        }
+      }
     }
-    if (rowMin < 0) continue;
-    for (let x = rowMin; x <= rowMax; x += SAMPLE) {
+    marked = next;
+  }
+
+  for (let y = 0; y < height; y += SAMPLE) {
+    for (let x = 0; x < width; x += SAMPLE) {
+      if (!marked[y * width + x]) continue;
       const lx = (x + 0.5 - cx) * scaleX;
       const ly = (y + 0.5 - cy) * scaleY;
       points.push({ x: lx, y: ly });
@@ -89,8 +156,16 @@ export function footprintFromImageData(
     }
   }
 
-  if (!points.length) return aabbFootprint(sourceWidth, sourceHeight);
-  return { points, minX, maxX, minY, maxY };
+  if (points.length < 8) return aabbFootprint(sourceWidth, sourceHeight);
+  const hull = convexHull(points);
+  return {
+    points,
+    hull: hull.length >= 3 ? hull : rectHull(sourceWidth, sourceHeight),
+    minX,
+    maxX,
+    minY,
+    maxY,
+  };
 }
 
 function drawToImageData(source: CanvasImageSource, width: number, height: number): ImageData | null {
@@ -150,7 +225,7 @@ export async function footprintFromFile(file: Blob, width: number, height: numbe
 }
 
 export async function footprintForItem(imagePath: string, width: number, height: number): Promise<ItemFootprint> {
-  const key = `${imagePath}:${width}x${height}`;
+  const key = `${CACHE_VERSION}:${imagePath}:${width}x${height}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -163,4 +238,10 @@ export async function footprintForItem(imagePath: string, width: number, height:
   }
   cache.set(key, next);
   return next;
+}
+
+export function forgetFootprint(imagePath: string): void {
+  for (const key of cache.keys()) {
+    if (key.includes(`:${imagePath}:`)) cache.delete(key);
+  }
 }

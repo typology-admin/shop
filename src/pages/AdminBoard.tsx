@@ -42,12 +42,22 @@ export function AdminBoard() {
   const { sections, setSections } = useBoardSections();
   const { settings } = useSiteSettings();
   const zoom = useBoardZoom();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--board', settings.boardColor);
+    return () => {
+      root.style.removeProperty('--board');
+    };
+  }, [settings.boardColor]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(true);
   const [toolsTab, setToolsTab] = useState<ToolsTab | null>('item');
   const [busy, setBusy] = useState(false);
   const [arrangingId, setArrangingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [addSectionId, setAddSectionId] = useState<string | null>(null);
   const settlingIds = useRef(new Set<string>());
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
@@ -293,6 +303,7 @@ export function AdminBoard() {
         panelOpen={panelOpen}
         onAdd={() => {
           setSelectedId(null);
+          setAddSectionId(null);
           setToolsTab('item');
           setPanelOpen(true);
         }}
@@ -351,6 +362,7 @@ export function AdminBoard() {
                         accessToken={auth.session?.access_token ?? null}
                         sections={sections}
                         defaultSectionId={
+                          addSectionId ??
                           nearestSection(
                             viewportCenterOnCanvas(
                               boardScale(window.innerWidth, zoom),
@@ -358,7 +370,8 @@ export function AdminBoard() {
                               window.innerHeight,
                             ).y,
                             sections,
-                          )?.id ?? null
+                          )?.id ??
+                          null
                         }
                         onSubmit={handleAdd}
                       />
@@ -386,22 +399,22 @@ export function AdminBoard() {
         </>
       ) : null}
       <SectionRail sections={sections} />
-      {items.length === 0 && status === 'ready' ? (
-        <div className="empty-screen" style={{ minHeight: 'calc(100vh - var(--bar-h))', paddingTop: 'var(--bar-h)' }}>
-          <div>
-            <h1 className="wordmark wordmark-ui">typology network</h1>
-            <p className="lede">Drop a product photo or paste an Amazon link to place the first object.</p>
-          </div>
-        </div>
-      ) : (
+      {status === 'ready' ? (
         <Board
           items={items}
           mode="admin"
           zoom={zoom}
           selectedId={selectedId}
+          backgroundColor={settings.boardColor}
           onSelect={handleSelect}
           onCommit={commit}
           wells={boardWells}
+          onAddAtWell={(sectionId) => {
+            setSelectedId(null);
+            setAddSectionId(sectionId);
+            setPanelOpen(true);
+            setToolsTab('item');
+          }}
           onDragStartItem={(id) => setDragging(id)}
           onDragMoveItem={(id, x, y) => {
             syncDragPose(id, x, y);
@@ -417,7 +430,15 @@ export function AdminBoard() {
             }
           }}
         />
-      )}
+      ) : null}
+      {items.length === 0 && status === 'ready' && boardWells.length === 0 ? (
+        <div className="empty-screen" style={{ minHeight: 'calc(100vh - var(--bar-h))', paddingTop: 'var(--bar-h)' }}>
+          <div>
+            <h1 className="wordmark wordmark-ui">typology network</h1>
+            <p className="lede">Drop a product photo or paste an Amazon link to place the first object.</p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

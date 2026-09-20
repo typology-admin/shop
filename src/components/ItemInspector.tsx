@@ -5,6 +5,7 @@ import { fetchImageBlob } from '../lib/images.ts';
 import type { BoardSection } from '../lib/sections.ts';
 import { parseTags, tagsToInput } from '../lib/tags.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
+import { BusyOverlay } from './BusyOverlay.tsx';
 import { CutoutEditor } from './CutoutEditor.tsx';
 
 type Props = {
@@ -32,7 +33,7 @@ export function ItemInspector({
 
   async function openCutout() {
     setError(null);
-    setWorking('Loading photo…');
+    setWorking('Removing background…');
     try {
       const blob = await fetchImageBlob(item.image_path);
       const next = await beginCutout(blob, 'item.png');
@@ -59,7 +60,8 @@ export function ItemInspector({
   }
 
   return (
-    <div className="inspector-block">
+    <div className="inspector-block busy-host">
+      {working ? <BusyOverlay message={working} /> : null}
       <h2>{item.title || 'Untitled object'}</h2>
 
       <label className="field">
@@ -180,7 +182,7 @@ export function ItemInspector({
 
       <div className="btn-row">
         <button type="button" className="btn btn-ghost" onClick={() => void openCutout()} disabled={Boolean(working)}>
-          {working ?? 'Edit cutout'}
+          Edit cutout
         </button>
         <button type="button" className="btn btn-ghost" onClick={onBringToFront}>
           Bring front

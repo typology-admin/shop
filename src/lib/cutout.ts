@@ -1,6 +1,6 @@
 const MAX_EDGE = 2400;
 export const DEFAULT_BG_TOLERANCE = 46;
-export const MIN_BG_TOLERANCE = 18;
+export const MIN_BG_TOLERANCE = 4;
 export const MAX_BG_TOLERANCE = 110;
 const HOLE_RATIO = 16 / 46;
 const FEATHER_RATIO = 28 / 46;
@@ -54,8 +54,13 @@ function sampleBackground(data: Uint8ClampedArray, width: number, height: number
     const b = data[i + 2] ?? 255;
     samples.push({ r, g, b, lum: (r + g + b) / 3 });
   }
-  const light = samples.filter((s) => s.lum >= 210);
-  const used = light.length >= 3 ? light : samples;
+  // Prefer bright / studio greys; fall back to the lightest cluster of edge samples.
+  const studio = samples.filter((s) => s.lum >= 165);
+  let used = studio.length >= 3 ? studio : samples;
+  const sorted = [...used].sort((a, b) => a.lum - b.lum);
+  const mid = sorted[Math.floor(sorted.length / 2)]?.lum ?? 220;
+  const clustered = used.filter((s) => Math.abs(s.lum - mid) <= 28);
+  if (clustered.length >= 3) used = clustered;
   const n = used.length || 1;
   return {
     r: Math.round(used.reduce((sum, s) => sum + s.r, 0) / n),
@@ -162,9 +167,8 @@ function autoAlpha(
   for (let p = 0; p < alpha.length; p += 1) {
     if ((alpha[p] ?? 0) > 16) remaining += 1;
   }
-  if (remaining < 24) {
-    throw new Error('Could not cut the object from a light background. Try a product photo on white.');
-  }
+  // Grey studio shots can wipe the subject; keep the original so the editor still opens.
+  if (remaining < 24) return sourceAlpha.slice();
 
   return alpha;
 }
@@ -179,13 +183,17 @@ export function compositeCutout(session: CutoutSession): ImageData {
 
 export function applyAutoCutout(session: CutoutSession, tolerance = session.tolerance): void {
   session.tolerance = Math.max(MIN_BG_TOLERANCE, Math.min(MAX_BG_TOLERANCE, tolerance));
-  session.alpha = autoAlpha(
-    session.pixels,
-    session.width,
-    session.height,
-    session.sourceAlpha,
-    session.tolerance,
-  );
+  try {
+    session.alpha = autoAlpha(
+      session.pixels,
+      session.width,
+      session.height,
+      session.sourceAlpha,
+      session.tolerance,
+    );
+  } catch {
+    session.alpha = session.sourceAlpha.slice();
+  }
 }
 
 export function resetCutout(session: CutoutSession): void {
@@ -227,6 +235,66 @@ export function paintCutout(
   }
 
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/** Punch an enclosed leftover background (ring hole, leash loop) from a seed point. */
+export function floodCutAt(
+  session: CutoutSession,
+  sx: number,
+  sy: number,
+  tolerance = DEFAULT_BG_TOLERANCE,
+): boolean {
+  const { width, height, pixels, alpha } = session;
+  const startX = Math.max(0, Math.min(width - 1, Math.round(sx)));
+  const startY = Math.max(0, Math.min(height - 1, Math.round(sy)));
+  const start = startY * width + startX;
+  if ((alpha[start] ?? 0) < 16) return false;
+
+  const si = start * 4;
+  const br = pixels[si] ?? 0;
+  const bg = pixels[si + 1] ?? 0;
+  const bb = pixels[si + 2] ?? 0;
+  const marked = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+  marked[start] = 1;
+  queue[tail++] = start;
+
+  while (head < tail) {
+    const idx = queue[head++] ?? 0;
+    const x = idx % width;
+    const y = (idx / width) | 0;
+    const neighbors = [
+      x > 0 ? idx - 1 : -1,
+      x + 1 < width ? idx + 1 : -1,
+      y > 0 ? idx - width : -1,
+      y + 1 < height ? idx + width : -1,
+    ];
+    for (const next of neighbors) {
+      if (next < 0 || marked[next]) continue;
+      if ((alpha[next] ?? 0) < 16) continue;
+      const i = next * 4;
+      if (colorDist(pixels[i] ?? 0, pixels[i + 1] ?? 0, pixels[i + 2] ?? 0, br, bg, bb) > tolerance) {
+        continue;
+      }
+      marked[next] = 1;
+      queue[tail++] = next;
+    }
+  }
+
+  if (tail < 8) return false;
+  // Don't wipe most of the object if the click landed on the product itself.
+  let opaque = 0;
+  for (let p = 0; p < alpha.length; p += 1) {
+    if ((alpha[p] ?? 0) > 16) opaque += 1;
+  }
+  if (tail > opaque * 0.45) return false;
+
+  for (let p = 0; p < marked.length; p += 1) {
+    if (marked[p]) alpha[p] = 0;
+  }
+  return true;
 }
 
 function cropToAlpha(image: ImageData): ImageData {
@@ -311,7 +379,13 @@ export async function beginCutout(source: Blob, name = 'item.png'): Promise<Cuto
     tolerance: DEFAULT_BG_TOLERANCE,
     canAuto,
   };
-  if (canAuto) applyAutoCutout(session, DEFAULT_BG_TOLERANCE);
+  if (canAuto) {
+    try {
+      applyAutoCutout(session, DEFAULT_BG_TOLERANCE);
+    } catch {
+      session.alpha = sourceAlpha.slice();
+    }
+  }
   return session;
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AccountBar } from '../components/AccountBar.tsx';
+import { CreateBoardDialog } from '../components/CreateBoardDialog.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
 import { usernameError } from '../lib/profile.ts';
 import {
@@ -17,11 +19,12 @@ export function Me() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
-  const [title, setTitle] = useState('');
   const [boards, setBoards] = useState<UserBoard[]>([]);
   const [inbox, setInbox] = useState<UserBoardSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const handle = auth.profile?.username;
 
@@ -64,18 +67,17 @@ export function Me() {
     }
   }
 
-  async function onCreate(event: FormEvent) {
-    event.preventDefault();
+  async function onCreate(title: string) {
     if (!auth.user) return;
     setBusy(true);
-    setError(null);
+    setCreateError(null);
     try {
       const board = await createBoard(auth.user.id, { title });
       setBoards((list) => [board, ...list]);
-      setTitle('');
+      setCreateOpen(false);
       if (handle) navigate(`/u/${handle}/${board.slug}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create the board.');
+      setCreateError(err instanceof Error ? err.message : 'Could not create the board.');
     } finally {
       setBusy(false);
     }
@@ -83,23 +85,12 @@ export function Me() {
 
   return (
     <main className="account-page">
-      <header className="account-bar">
-        <Link className="account-bar-brand" to="/">
-          typology network
-        </Link>
-        <div className="account-bar-actions">
-          <span className="account-bar-meta">{auth.email}</span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => {
-              void auth.signOut().then(() => navigate('/login'));
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
+      <AccountBar
+        email={auth.email}
+        onSignOut={() => {
+          void auth.signOut().then(() => navigate('/login'));
+        }}
+      />
 
       <div className="account-wrap">
         <p className="auth-kicker">You</p>
@@ -132,25 +123,15 @@ export function Me() {
         )}
 
         <section className="account-boards">
-          <h2>Boards</h2>
-          {handle ? (
-            <form className="account-form" onSubmit={(event) => void onCreate(event)}>
-              <label className="field">
-                <span>New board</span>
-                <input
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  placeholder="Kitchen, gifts, desk…"
-                  required
-                />
-              </label>
-              <button className="btn" type="submit" disabled={busy}>
+          <div className="account-section-head">
+            <h2>Boards</h2>
+            {handle ? (
+              <button type="button" className="btn" onClick={() => setCreateOpen(true)}>
                 Create board
               </button>
-            </form>
-          ) : (
-            <p className="hint">Save a username first.</p>
-          )}
+            ) : null}
+          </div>
+          {!handle ? <p className="hint">Save a username first.</p> : null}
           <ul className="account-board-list">
             {boards.map((board) => (
               <li key={board.id}>
@@ -159,7 +140,7 @@ export function Me() {
                 ) : (
                   <span>{board.title}</span>
                 )}
-                <span className="account-bar-meta">{board.visibility}</span>
+                <span className="admin-bar-meta">{board.visibility}</span>
                 <button
                   type="button"
                   className="text-btn"
@@ -231,6 +212,17 @@ export function Me() {
           </button>
         </section>
       </div>
+
+      <CreateBoardDialog
+        open={createOpen}
+        busy={busy}
+        error={createError}
+        onClose={() => {
+          setCreateOpen(false);
+          setCreateError(null);
+        }}
+        onSubmit={onCreate}
+      />
     </main>
   );
 }
