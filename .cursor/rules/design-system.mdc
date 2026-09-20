@@ -1,0 +1,19 @@
+---
+description: Typology Network visual design system — colors, type, pills, frost, admin/public UI
+alwaysApply: true
+---
+
+# Design system
+
+Follow [DESIGN.md](mdc:DESIGN.md) for all UI work on this project.
+
+## Quick constraints
+
+- Colors only from CSS tokens in `src/styles/global.css` (`--board`, `--paper`, `--ink`, `--ink-muted`, `--danger`) and the frosted recipes documented in DESIGN.md.
+- Typography: `--font-ui` for UI; brand wordmark on empty/loading uses `.wordmark-ui`. Lowercase button/pill labels.
+- Shape: pills (`border-radius: 999px`) for buttons/tabs/rail; `20px` for admin panel cards.
+- Effects: frosted glass (`backdrop-filter`) over the board; no purple themes, glow stacks, or heavy card dashboards.
+- Admin tools: floating frosted icon rail + one open panel; transparent outlines on frost shells.
+- Public shop: the knoll board is the hero; chrome is frosted pills, not a dense marketing header.
+
+When adding UI, extend existing classes (`.btn`, `.btn-ghost`, `.chrome-pill`, `.field`) before inventing new visual patterns.

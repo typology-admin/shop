@@ -120,8 +120,8 @@ export function SiteFooter({ overlay = false }: { overlay?: boolean }) {
         className="shop-footer-panel"
         inert={isMobile && !open ? true : undefined}
       >
-        <span className="shop-footer-mark">®typology network 2026</span>
-        <nav className="shop-footer-links" aria-label="Social">
+        <span className="shop-footer-mark">® typology.network 2026</span>
+        <nav className="shop-footer-links" aria-label="Footer">
           {links.map((link) => (
             <button
               key={link.id}
@@ -137,6 +137,12 @@ export function SiteFooter({ overlay = false }: { overlay?: boolean }) {
           ))}
           <Link className="shop-footer-link" to="/network" onClick={() => setOpen(false)}>
             network
+          </Link>
+          <Link className="shop-footer-link" to="/terms" onClick={() => setOpen(false)}>
+            terms
+          </Link>
+          <Link className="shop-footer-link" to="/privacy" onClick={() => setOpen(false)}>
+            privacy
           </Link>
         </nav>
       </div>

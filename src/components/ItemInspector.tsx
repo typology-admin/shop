@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { MAX_SCALE, MIN_SCALE } from '../../shared/constants.ts';
 import { beginCutout, finalizeCutout, type CutoutSession, type PreparedImage } from '../lib/cutout.ts';
 import { fetchImageBlob } from '../lib/images.ts';
+import type { BoardSection } from '../lib/sections.ts';
 import { parseTags, tagsToInput } from '../lib/tags.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 import { CutoutEditor } from './CutoutEditor.tsx';
 
 type Props = {
   item: Item;
+  sections: BoardSection[];
   onPatch: (patch: ItemPatch, commit?: boolean) => void;
   onBringToFront: () => void;
   onSendToBack: () => void;
@@ -17,6 +19,7 @@ type Props = {
 
 export function ItemInspector({
   item,
+  sections,
   onPatch,
   onBringToFront,
   onSendToBack,
@@ -99,6 +102,27 @@ export function ItemInspector({
           onBlur={(event) => onPatch({ tags: parseTags(event.target.value) }, true)}
         />
       </label>
+
+      {sections.length > 0 ? (
+        <label className="field">
+          <span>Attracted to</span>
+          <select
+            value={item.section_id ?? ''}
+            onChange={(event) => {
+              const next = event.target.value || null;
+              onPatch({ section_id: next }, true);
+            }}
+          >
+            <option value="">Nearest scene</option>
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.name}
+              </option>
+            ))}
+          </select>
+          <p className="field-hint">Gravity pulls this object toward that scene’s well.</p>
+        </label>
+      ) : null}
 
       <label className="range-field">
         <header>

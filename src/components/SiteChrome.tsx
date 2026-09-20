@@ -11,7 +11,7 @@ import {
   visitNetworkItem,
   type NetworkItem,
 } from '../lib/network.ts';
-import { nearestSection } from '../lib/knollLayout.ts';
+import { sectionForItem } from '../lib/knollLayout.ts';
 import { mailtoHref } from '../lib/siteSettings.ts';
 import { itemMatchesQuery } from '../lib/tags.ts';
 import type { Item } from '../lib/types.ts';
@@ -101,7 +101,7 @@ export function SiteChrome({
 
   const catalog = useMemo(() => {
     return shopItems.map((item) => {
-      const scene = nearestSection(item.y, sections);
+      const scene = sectionForItem(item, sections);
       const tags = item.tags ?? [];
       const hay = `${item.title} ${item.store} ${tags.join(' ')} ${scene?.name ?? ''}`;
       return { item, scene, tags, hay };
@@ -145,7 +145,6 @@ export function SiteChrome({
   }, [query, tagIndex]);
 
   const overlayOpen =
-    aboutOpen ||
     (isMobile && menuOpen) ||
     (searchOpen && (hits.length > 0 || suggestedTags.length > 0));
 
@@ -277,6 +276,17 @@ export function SiteChrome({
           >
             contact
           </a>
+          <p className="chrome-about-legal">
+            © {new Date().getFullYear()} typology.network®. Images link to their sources; we don’t
+            claim ownership.{' '}
+            <Link to="/terms" onClick={() => setAboutOpen(false)}>
+              terms
+            </Link>
+            {' · '}
+            <Link to="/privacy" onClick={() => setAboutOpen(false)}>
+              privacy
+            </Link>
+          </p>
         </div>
       ) : null}
     </div>

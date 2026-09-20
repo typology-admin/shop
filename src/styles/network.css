@@ -125,6 +125,16 @@ body.is-network {
   padding: 0 16px;
 }
 
+.chrome-about-legal {
+  font-size: 11px !important;
+  color: var(--ink-muted) !important;
+}
+
+.chrome-about-legal a {
+  color: var(--ink);
+  text-underline-offset: 2px;
+}
+
 .chrome-search-field {
   display: flex;
   align-items: center;

@@ -23,13 +23,13 @@ export function NetworkHome() {
         )}
       </main>
       <footer className="network-footer">
-        <span>© {new Date().getFullYear()} typology.network. All rights reserved.</span>
+        <span>© {new Date().getFullYear()} typology.network®. All rights reserved.</span>
         <nav aria-label="Footer">
           <Link to="/network/about">About</Link>
           {' · '}
-          <Link to="/network/privacy">Privacy</Link>
+          <Link to="/privacy">Privacy</Link>
           {' · '}
-          <Link to="/network/terms">Terms of Use</Link>
+          <Link to="/terms">Terms of Service</Link>
         </nav>
       </footer>
     </div>

@@ -44,6 +44,7 @@ export function AddItemForm({
   const [editorOpen, setEditorOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
+  const [contentOk, setContentOk] = useState(false);
   const sourceRef = useRef<'upload' | 'url' | null>(null);
   const generation = useRef(0);
 
@@ -162,6 +163,10 @@ export function AddItemForm({
       setLocalError('Paste an affiliate URL.');
       return;
     }
+    if (!contentOk) {
+      setLocalError('Confirm the image is allowed under our content rules.');
+      return;
+    }
     try {
       const image = session
         ? await finalizeCutout(session)
@@ -184,6 +189,7 @@ export function AddItemForm({
       setTags('');
       setSession(null);
       setPrepared(null);
+      setContentOk(false);
     } catch (err) {
       if (err instanceof Error && err.message === 'Cancelled.') return;
       setLocalError(err instanceof Error ? err.message : 'Could not add item.');
@@ -304,7 +310,20 @@ export function AddItemForm({
       {working ? <p className="form-status">{working}</p> : null}
       {message ? <p className="form-error">{message}</p> : null}
 
-      <button className="btn" type="submit" disabled={locked}>
+      <label className="check-field">
+        <input
+          type="checkbox"
+          checked={contentOk}
+          disabled={locked}
+          onChange={(event) => setContentOk(event.target.checked)}
+        />
+        <span>
+          This image is not weapons, violence, sex, drugs, or other NSFW content. Images remain
+          owned by their sources — typology.network does not claim ownership.
+        </span>
+      </label>
+
+      <button className="btn" type="submit" disabled={locked || !contentOk}>
         {busy ? 'Placing…' : 'Place in scene'}
       </button>
 

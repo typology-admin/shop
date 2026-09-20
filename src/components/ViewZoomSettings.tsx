@@ -8,7 +8,7 @@ import {
 } from '../../shared/constants.ts';
 import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 
-export function ViewZoomSettings() {
+export function ViewZoomSettings({ onPackingCommit }: { onPackingCommit?: (gap: number) => void }) {
   const { settings, setSettings, save, error } = useSiteSettings();
 
   function commit() {
@@ -102,43 +102,85 @@ export function ViewZoomSettings() {
       </label>
       <h2 style={{ fontSize: 18, margin: '22px 0 10px' }}>Knoll spacing</h2>
       <p className="hint" style={{ margin: '0 0 12px' }}>
-        Gap used when auto-arranging a scene around its hook. Collision follows the visible pixels in each PNG.
+        Pack tightness controls how close objects sit when gravity settles. Drag an object or hit
+        Rearrange to apply.
       </p>
       <label className="range-field">
         <header>
-          <span>Item distance</span>
-          <span>{settings.knollGap}px</span>
+          <span>Pack tightness</span>
+          <span>{settings.knollGap <= 24 ? 'tight' : settings.knollGap >= 120 ? 'loose' : `${settings.knollGap}px`}</span>
         </header>
         <input
           type="range"
           min={MIN_KNOLL_GAP}
           max={MAX_KNOLL_GAP}
           step={4}
-          value={settings.knollGap}
-          onChange={(event) =>
-            setSettings({ ...settings, knollGap: Number(event.target.value) })
-          }
+          value={MAX_KNOLL_GAP + MIN_KNOLL_GAP - settings.knollGap}
+          onChange={(event) => {
+            const inverted = MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number(event.target.value);
+            setSettings({ ...settings, knollGap: inverted });
+          }}
           onPointerUp={(event) => {
-            const next = {
-              ...settings,
-              knollGap: Number((event.currentTarget as HTMLInputElement).value),
-            };
+            const inverted =
+              MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number((event.currentTarget as HTMLInputElement).value);
+            const next = { ...settings, knollGap: inverted };
             setSettings(next);
             void save(next).catch(() => {
               /* keep local values; error is shown */
             });
+            onPackingCommit?.(inverted);
           }}
           onBlur={(event) => {
-            const next = {
-              ...settings,
-              knollGap: Number((event.currentTarget as HTMLInputElement).value),
-            };
+            const inverted =
+              MAX_KNOLL_GAP + MIN_KNOLL_GAP - Number((event.currentTarget as HTMLInputElement).value);
+            const next = { ...settings, knollGap: inverted };
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+            onPackingCommit?.(inverted);
+          }}
+        />
+        <p className="hint" style={{ margin: 0, display: 'flex', justifyContent: 'space-between' }}>
+          <span>tight</span>
+          <span>loose</span>
+        </p>
+      </label>
+      <label className="field">
+        <span>Gravity</span>
+        <select
+          value={settings.knollGravity ? 'on' : 'off'}
+          onChange={(event) => {
+            const next = { ...settings, knollGravity: event.target.value === 'on' };
             setSettings(next);
             void save(next).catch(() => {
               /* keep local values; error is shown */
             });
           }}
-        />
+        >
+          <option value="on">on — pull toward wells</option>
+          <option value="off">off — separate only</option>
+        </select>
+      </label>
+      <label className="field">
+        <span>Rotation</span>
+        <select
+          value={settings.knollRotation}
+          onChange={(event) => {
+            const value = event.target.value;
+            const knollRotation =
+              value === 'radial' || value === 'none' ? value : 'grid';
+            const next = { ...settings, knollRotation } as typeof settings;
+            setSettings(next);
+            void save(next).catch(() => {
+              /* keep local values; error is shown */
+            });
+          }}
+        >
+          <option value="grid">grid — snap to 90°</option>
+          <option value="radial">radial — long axis toward well</option>
+          <option value="none">off — keep current angle</option>
+        </select>
       </label>
     </div>
   );

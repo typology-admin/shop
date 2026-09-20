@@ -19,11 +19,14 @@ export type BoardSection = {
 const LOCAL_KEY = 'knoll-board-sections';
 const LAST_SCENE_KEY = 'typology-last-scene';
 
+export const SCENE_SPACING = 1400;
+export const SCENE_START_Y = 900;
+
 export const SCENE_KITS: Array<Omit<BoardSection, 'id'>> = [
   {
     name: 'morning',
     slug: 'morning',
-    y: 900,
+    y: SCENE_START_Y,
     sortOrder: 0,
     items: [
       { emoji: '☕', label: 'Coffee' },
@@ -37,7 +40,7 @@ export const SCENE_KITS: Array<Omit<BoardSection, 'id'>> = [
   {
     name: 'desk',
     slug: 'desk',
-    y: 2300,
+    y: SCENE_START_Y + SCENE_SPACING,
     sortOrder: 1,
     items: [
       { emoji: '💻', label: 'Computer' },
@@ -51,7 +54,7 @@ export const SCENE_KITS: Array<Omit<BoardSection, 'id'>> = [
   {
     name: 'weekend',
     slug: 'weekend',
-    y: 3700,
+    y: SCENE_START_Y + SCENE_SPACING * 2,
     sortOrder: 2,
     items: [
       { emoji: '🧺', label: 'Picnic' },
@@ -65,7 +68,7 @@ export const SCENE_KITS: Array<Omit<BoardSection, 'id'>> = [
   {
     name: 'workshop',
     slug: 'workshop',
-    y: 5100,
+    y: SCENE_START_Y + SCENE_SPACING * 3,
     sortOrder: 3,
     items: [
       { emoji: '🔨', label: 'Hammer' },
@@ -79,7 +82,7 @@ export const SCENE_KITS: Array<Omit<BoardSection, 'id'>> = [
   {
     name: 'boat',
     slug: 'boat',
-    y: 6500,
+    y: SCENE_START_Y + SCENE_SPACING * 4,
     sortOrder: 4,
     items: [
       { emoji: '🧭', label: 'Compass' },
@@ -225,7 +228,7 @@ export async function insertBoardSection(input: {
 
 export async function updateBoardSection(
   section: BoardSection,
-  patch: Partial<Pick<BoardSection, 'name' | 'y'>>,
+  patch: Partial<Pick<BoardSection, 'name' | 'y' | 'sortOrder'>>,
 ): Promise<BoardSection> {
   const next = { ...section, ...patch };
   if (!hasSupabaseConfig()) {
@@ -239,12 +242,34 @@ export async function updateBoardSection(
     .update({
       name: patch.name ?? section.name,
       y: patch.y ?? section.y,
+      sort_order: patch.sortOrder ?? section.sortOrder,
     })
     .eq('id', section.id)
     .select('id, name, slug, y, sort_order, items')
     .single();
   if (error) throw error;
   return rowToSection(data as SectionRow);
+}
+
+/** Spread scenes on an even vertical rhythm (canvas Y). */
+export function evenSectionPositions(sections: BoardSection[]): BoardSection[] {
+  const ranked = [...sections].sort((a, b) => a.y - b.y || a.sortOrder - b.sortOrder);
+  return ranked.map((section, index) => ({
+    ...section,
+    y: SCENE_START_Y + index * SCENE_SPACING,
+    sortOrder: index,
+  }));
+}
+
+export async function spaceBoardSectionsEvenly(sections: BoardSection[]): Promise<BoardSection[]> {
+  const next = evenSectionPositions(sections);
+  await Promise.all(
+    next.map((section) => updateBoardSection(section, { y: section.y, sortOrder: section.sortOrder })),
+  );
+  if (!hasSupabaseConfig()) {
+    writeLocal(next);
+  }
+  return next;
 }
 
 export async function deleteBoardSection(section: BoardSection): Promise<void> {

@@ -1,16 +1,21 @@
 import {
   DEFAULT_DESKTOP_ZOOM,
   DEFAULT_KNOLL_GAP,
+  DEFAULT_KNOLL_GRAVITY,
+  DEFAULT_KNOLL_ROTATION,
   DEFAULT_MOBILE_ZOOM,
   DEFAULT_SECTION_HOOKS_HIDE_MS,
   MAX_KNOLL_GAP,
   MAX_SECTION_HOOKS_HIDE_MS,
   MIN_KNOLL_GAP,
   MIN_SECTION_HOOKS_HIDE_MS,
+  type KnollRotationMode,
 } from '../../shared/constants.ts';
 import { clampViewZoom } from './canvas.ts';
 import { hasSupabaseConfig } from './env.ts';
 import { getSupabase } from './supabase.ts';
+
+export type { KnollRotationMode };
 
 export const DEFAULT_ABOUT_TEXT =
   'this is a carefully curated selection of objects we think are desirable to own. although the store references might majorly be from one source, we are not associated with any store — but take advantage of affiliation benefits. get in touch for questions about items, items you want to see, items you\'re selling.';
@@ -24,6 +29,8 @@ export type SiteSettings = {
   contactEmail: string;
   sectionHooksHideMs: number;
   knollGap: number;
+  knollGravity: boolean;
+  knollRotation: KnollRotationMode;
 };
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -33,6 +40,8 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   contactEmail: DEFAULT_CONTACT_EMAIL,
   sectionHooksHideMs: DEFAULT_SECTION_HOOKS_HIDE_MS,
   knollGap: DEFAULT_KNOLL_GAP,
+  knollGravity: DEFAULT_KNOLL_GRAVITY,
+  knollRotation: DEFAULT_KNOLL_ROTATION,
 };
 
 const LOCAL_KEY = 'typology-site-settings';
@@ -71,7 +80,36 @@ function asGap(value: number | string | null | undefined): number {
   return clampKnollGap(Number.isFinite(n) ? n : DEFAULT_KNOLL_GAP);
 }
 
+function asRotation(value: unknown): KnollRotationMode {
+  if (value === 'grid' || value === 'radial' || value === 'none') return value;
+  return DEFAULT_KNOLL_ROTATION;
+}
+
+function asBool(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true' || value === 1 || value === '1') return true;
+  if (value === 'false' || value === 0 || value === '0') return false;
+  return fallback;
+}
+
+function localKnollPrefs(): Pick<SiteSettings, 'knollGravity' | 'knollRotation'> {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    if (!raw) {
+      return { knollGravity: DEFAULT_KNOLL_GRAVITY, knollRotation: DEFAULT_KNOLL_ROTATION };
+    }
+    const parsed = JSON.parse(raw) as Partial<SiteSettings>;
+    return {
+      knollGravity: asBool(parsed.knollGravity, DEFAULT_KNOLL_GRAVITY),
+      knollRotation: asRotation(parsed.knollRotation),
+    };
+  } catch {
+    return { knollGravity: DEFAULT_KNOLL_GRAVITY, knollRotation: DEFAULT_KNOLL_ROTATION };
+  }
+}
+
 export function rowToSettings(row: SettingsRow): SiteSettings {
+  const prefs = localKnollPrefs();
   return {
     desktopZoom: asZoom(row.desktop_zoom, DEFAULT_DESKTOP_ZOOM),
     mobileZoom: asZoom(row.mobile_zoom, DEFAULT_MOBILE_ZOOM),
@@ -79,6 +117,8 @@ export function rowToSettings(row: SettingsRow): SiteSettings {
     contactEmail: (row.contact_email || DEFAULT_CONTACT_EMAIL).trim() || DEFAULT_CONTACT_EMAIL,
     sectionHooksHideMs: asHideMs(row.section_hooks_hide_ms),
     knollGap: asGap(row.knoll_gap),
+    knollGravity: prefs.knollGravity,
+    knollRotation: prefs.knollRotation,
   };
 }
 
@@ -94,6 +134,8 @@ function readLocal(): SiteSettings {
       contactEmail: parsed.contactEmail?.trim() || DEFAULT_CONTACT_EMAIL,
       sectionHooksHideMs: asHideMs(parsed.sectionHooksHideMs),
       knollGap: asGap(parsed.knollGap),
+      knollGravity: asBool(parsed.knollGravity, DEFAULT_KNOLL_GRAVITY),
+      knollRotation: asRotation(parsed.knollRotation),
     };
   } catch {
     return DEFAULT_SITE_SETTINGS;
@@ -118,7 +160,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
     .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
     .eq('id', 'shop')
     .maybeSingle();
-  if (error || !data) return DEFAULT_SITE_SETTINGS;
+  if (error || !data) return { ...DEFAULT_SITE_SETTINGS, ...localKnollPrefs() };
   return rowToSettings(data as SettingsRow);
 }
 
@@ -130,11 +172,11 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
     contactEmail: settings.contactEmail.trim() || DEFAULT_CONTACT_EMAIL,
     sectionHooksHideMs: clampSectionHooksHideMs(settings.sectionHooksHideMs),
     knollGap: clampKnollGap(settings.knollGap),
+    knollGravity: Boolean(settings.knollGravity),
+    knollRotation: asRotation(settings.knollRotation),
   };
-  if (!hasSupabaseConfig()) {
-    writeLocal(next);
-    return next;
-  }
+  writeLocal(next);
+  if (!hasSupabaseConfig()) return next;
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured.');
   const { data, error } = await supabase
@@ -152,5 +194,5 @@ export async function saveSiteSettings(settings: SiteSettings): Promise<SiteSett
     .select('desktop_zoom, mobile_zoom, about_text, contact_email, section_hooks_hide_ms, knoll_gap')
     .single();
   if (error) throw error;
-  return rowToSettings(data as SettingsRow);
+  return { ...rowToSettings(data as SettingsRow), knollGravity: next.knollGravity, knollRotation: next.knollRotation };
 }

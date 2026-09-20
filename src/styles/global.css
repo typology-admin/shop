@@ -380,6 +380,7 @@ a {
   background: none;
   border: 0;
   padding: 0;
+  text-transform: lowercase;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -930,7 +931,13 @@ html.chrome-overlay-open .shop-footer {
 html.item-modal-open .board-scroll,
 html.item-modal-open .site-chrome,
 html.item-modal-open .scroll-rail,
-html.item-modal-open .shop-footer {
+html.item-modal-open .shop-footer,
+html.account-modal-open .board-scroll,
+html.account-modal-open .admin-bar,
+html.account-modal-open .user-board-chrome,
+html.account-modal-open .user-section-rail,
+html.account-modal-open .user-inspector,
+html.account-modal-open .user-suggest {
   filter: blur(40px);
   pointer-events: none;
 }
@@ -1133,42 +1140,7 @@ html.cutout-editor-open .admin-page {
 
 .account-page {
   min-height: 100vh;
-  padding: 88px 24px 48px;
-}
-
-.account-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  background: rgba(239, 236, 227, 0.92);
-  backdrop-filter: blur(10px);
-}
-
-.account-bar-brand {
-  font-family: var(--font-ui);
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  text-decoration: none;
-  text-transform: lowercase;
-}
-
-.account-bar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.account-bar-meta {
-  color: var(--ink-muted);
-  font-size: 12px;
+  padding: calc(var(--bar-h) + 40px) 24px 48px;
 }
 
 .account-wrap {
@@ -1185,11 +1157,11 @@ html.cutout-editor-open .admin-page {
 }
 
 .account-boards h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
+  margin: 0 0 16px;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .auth-panel a,
@@ -1215,7 +1187,6 @@ html.cutout-editor-open .admin-page {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(28, 27, 24, 0.18);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -1225,10 +1196,38 @@ html.cutout-editor-open .admin-page {
   width: min(420px, 100%);
   max-height: 90vh;
   overflow: auto;
-  padding: 24px;
+  padding: 16px;
+  border: 1px solid transparent;
   border-radius: 20px;
-  background: rgba(239, 236, 227, 0.94);
-  backdrop-filter: blur(20px);
+  background: rgba(239, 236, 227, 0.72);
+  backdrop-filter: blur(40px) saturate(1.25);
+  -webkit-backdrop-filter: blur(40px) saturate(1.25);
+}
+
+.account-modal h2 {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+}
+
+.account-modal .btn-row {
+  margin-bottom: 16px;
+}
+
+.account-modal .lede {
+  margin: 0 0 12px;
+}
+
+.field-grow {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.field-narrow {
+  width: 88px;
+  margin-bottom: 0;
 }
 
 .account-preview {
@@ -1239,27 +1238,63 @@ html.cutout-editor-open .admin-page {
   object-fit: contain;
 }
 
+.field-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.field-check input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--ink);
+}
+
 .user-board-page {
   min-height: 100vh;
 }
 
+.user-board-chrome {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.user-board-chrome > * {
+  pointer-events: auto;
+}
+
 .user-section-rail {
   position: fixed;
-  top: 56px;
+  top: calc(var(--bar-h) + 8px);
   left: 12px;
   z-index: 28;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  pointer-events: none;
 }
 
 .user-section-chip {
+  pointer-events: auto;
   display: flex;
   gap: 6px;
   align-items: center;
-  background: rgba(239, 236, 227, 0.8);
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(28, 27, 24, 0.16);
   border-radius: 999px;
-  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(18px) saturate(1.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.45);
 }
 
 .user-section-chip input {
@@ -1274,10 +1309,13 @@ html.cutout-editor-open .admin-page {
   right: 16px;
   bottom: 64px;
   z-index: 28;
-  width: min(280px, calc(100vw - 32px));
+  width: min(var(--panel-w), calc(100vw - 32px));
   padding: 16px;
-  border-radius: 16px;
-  background: rgba(239, 236, 227, 0.92);
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: rgba(239, 236, 227, 0.72);
+  backdrop-filter: blur(40px) saturate(1.25);
+  -webkit-backdrop-filter: blur(40px) saturate(1.25);
 }
 
 .affiliate-disclosure {
@@ -1304,4 +1342,97 @@ html.cutout-editor-open .admin-page {
   -webkit-backdrop-filter: blur(32px) saturate(1.5);
   padding: 6px;
   z-index: 2;
+}
+
+.check-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.check-field input {
+  margin-top: 2px;
+  flex: 0 0 auto;
+  accent-color: var(--ink);
+}
+
+.check-field a {
+  color: var(--ink);
+  text-underline-offset: 2px;
+}
+
+.legal-section {
+  margin: 28px 0 0;
+}
+
+.legal-section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+}
+
+.legal-section ul {
+  margin: 0 0 12px;
+  padding-left: 1.2em;
+}
+
+.legal-section li {
+  margin-bottom: 6px;
+}
+
+.cookie-consent {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.cookie-consent-inner {
+  pointer-events: auto;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border: 1px solid transparent;
+  border-radius: 20px;
+  background: rgba(239, 236, 227, 0.82);
+  backdrop-filter: blur(28px) saturate(1.2);
+  -webkit-backdrop-filter: blur(28px) saturate(1.2);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.cookie-consent-inner p {
+  margin: 0 0 12px;
+}
+
+.cookie-consent-inner a {
+  color: var(--ink);
+  text-underline-offset: 2px;
+}
+
+.cookie-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cookie-consent-actions .btn {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .cookie-consent {
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
 }

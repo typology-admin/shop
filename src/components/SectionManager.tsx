@@ -3,6 +3,7 @@ import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
 import {
   deleteBoardSection,
   insertBoardSection,
+  spaceBoardSectionsEvenly,
   updateBoardSection,
   type BoardSection,
 } from '../lib/sections.ts';
@@ -12,7 +13,7 @@ type Props = {
   onChange: (sections: BoardSection[]) => void;
   zoom?: number;
   arrangingId?: string | null;
-  onArrange?: (section: BoardSection) => void;
+  onRearrange?: (section: BoardSection) => void;
 };
 
 export function SectionManager({
@@ -20,10 +21,11 @@ export function SectionManager({
   onChange,
   zoom = 1,
   arrangingId = null,
-  onArrange,
+  onRearrange,
 }: Props) {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [spacing, setSpacing] = useState(false);
 
   function currentY() {
     const scale = boardScale(window.innerWidth, zoom);
@@ -48,11 +50,27 @@ export function SectionManager({
     }
   }
 
+  async function onSpaceEvenly() {
+    if (sections.length < 2) return;
+    setError(null);
+    setSpacing(true);
+    try {
+      const next = await spaceBoardSectionsEvenly(sections);
+      onChange(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not space scenes.');
+    } finally {
+      setSpacing(false);
+    }
+  }
+
   return (
     <div className="inspector-block">
       <h2 style={{ fontSize: 18, marginBottom: 10 }}>Sections</h2>
       <p className="hint" style={{ margin: '0 0 12px' }}>
-        Scene hooks on the shop board. Each hook is a gravity center: auto-arrange knolls its objects around it.
+        Each scene has one gravity well at its vertical center, locked to the window’s horizontal
+        center. Set here moves the scene; Space evenly restores equal gaps; Rearrange knolls objects
+        around its well.
       </p>
       {error ? <p className="form-error">{error}</p> : null}
       <form onSubmit={(event) => void onAdd(event)}>
@@ -60,9 +78,19 @@ export function SectionManager({
           <span>Name</span>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="new arrivals" />
         </label>
-        <button className="btn" type="submit" disabled={!name.trim()}>
-          Add at this view
-        </button>
+        <div className="btn-row">
+          <button className="btn" type="submit" disabled={!name.trim()}>
+            Add at this view
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={spacing || sections.length < 2}
+            onClick={() => void onSpaceEvenly()}
+          >
+            {spacing ? 'Spacing…' : 'Space evenly'}
+          </button>
+        </div>
       </form>
       {sections.map((section) => (
         <div key={section.id} className="section-admin-row">
@@ -96,14 +124,14 @@ export function SectionManager({
             >
               Set here
             </button>
-            {onArrange ? (
+            {onRearrange ? (
               <button
                 type="button"
                 className="btn btn-ghost"
                 disabled={arrangingId === section.id}
-                onClick={() => onArrange(section)}
+                onClick={() => onRearrange(section)}
               >
-                {arrangingId === section.id ? 'Arranging…' : 'Auto arrange'}
+                {arrangingId === section.id ? 'Rearranging…' : 'Rearrange'}
               </button>
             ) : null}
             <button
