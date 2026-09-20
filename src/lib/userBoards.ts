@@ -13,6 +13,7 @@ export type UserBoard = {
   wishlist_enabled: boolean;
   suggestions_enabled: boolean;
   og_image_path: string | null;
+  thumbnail_emoji: string | null;
   background_color: string;
   created_at: string;
   updated_at: string;
@@ -83,7 +84,7 @@ export type BoardBundle = {
 };
 
 const BOARD_COLS =
-  'id, owner_id, title, slug, visibility, share_token, wishlist_enabled, suggestions_enabled, og_image_path, background_color, created_at, updated_at';
+  'id, owner_id, title, slug, visibility, share_token, wishlist_enabled, suggestions_enabled, og_image_path, thumbnail_emoji, background_color, created_at, updated_at';
 const SECTION_COLS = 'id, board_id, title, x, y, strength, sort_order, created_at';
 const ITEM_COLS =
   'id, board_id, section_id, url, title, price, currency, image_path, source_image_url, image_width, image_height, x, y, rotation, scale, locked, z_index, created_at, updated_at';
@@ -133,8 +134,18 @@ export async function listOwnBoards(ownerId: string): Promise<UserBoard[]> {
     .select(BOARD_COLS)
     .eq('owner_id', ownerId)
     .order('updated_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as UserBoard[];
+  if (error) {
+    throw new Error(error.message || error.details || error.hint || 'Could not load boards.');
+  }
+  return (data ?? []).map(normalizeBoard);
+}
+
+function normalizeBoard(row: UserBoard): UserBoard {
+  return {
+    ...row,
+    thumbnail_emoji: row.thumbnail_emoji ?? null,
+    background_color: row.background_color || '#bfbfbf',
+  };
 }
 
 export async function listPublicBoards(ownerId: string): Promise<UserBoard[]> {
@@ -145,8 +156,8 @@ export async function listPublicBoards(ownerId: string): Promise<UserBoard[]> {
     .eq('owner_id', ownerId)
     .eq('visibility', 'public')
     .order('updated_at', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as UserBoard[];
+  if (error) throw new Error(error.message || error.details || 'Could not load boards.');
+  return (data ?? []).map(normalizeBoard);
 }
 
 export async function createBoard(
@@ -180,6 +191,7 @@ export async function updateBoard(
       | 'wishlist_enabled'
       | 'suggestions_enabled'
       | 'og_image_path'
+      | 'thumbnail_emoji'
       | 'background_color'
     >
   >,

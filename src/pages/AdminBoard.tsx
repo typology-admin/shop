@@ -4,16 +4,20 @@ import { AddItemForm, type AddItemDraft } from '../components/AddItemForm.tsx';
 import { AdminBar } from '../components/AdminBar.tsx';
 import { AdminToolsRail, type ToolsTab } from '../components/AdminToolsRail.tsx';
 import { Board } from '../components/Board.tsx';
+import { InventoryPanel } from '../components/InventoryPanel.tsx';
 import { ItemInspector } from '../components/ItemInspector.tsx';
 import { SectionManager } from '../components/SectionManager.tsx';
 import { SectionRail } from '../components/SectionRail.tsx';
 import { ViewZoomSettings } from '../components/ViewZoomSettings.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useBoardDropAdd } from '../hooks/useBoardDropAdd.ts';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useGravitySettle } from '../hooks/useGravitySettle.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useBoardZoom, useSiteSettings } from '../hooks/useSiteSettings.ts';
-import { boardScale, viewportCenterOnCanvas } from '../lib/canvas.ts';
+import { useWellScrollSnap } from '../hooks/useWellScrollSnap.ts';
+import type { BoardDropPayload } from '../lib/boardDrop.ts';
+import { boardScale, scrollTopForCanvasY, viewportCenterOnCanvas } from '../lib/canvas.ts';
 import type { PreparedImage } from '../lib/cutout.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { forgetImageUrl, withAmazonTag } from '../lib/images.ts';
@@ -42,6 +46,13 @@ export function AdminBoard() {
   const { sections, setSections } = useBoardSections();
   const { settings } = useSiteSettings();
   const zoom = useBoardZoom();
+  const wellYs = useMemo(() => sections.map((section) => section.y), [sections]);
+
+  useWellScrollSnap({
+    wellYs,
+    zoom,
+    enabled: status === 'ready' && wellYs.length > 0,
+  });
 
   useEffect(() => {
     const root = document.documentElement;
@@ -58,6 +69,7 @@ export function AdminBoard() {
   const [arrangingId, setArrangingId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [addSectionId, setAddSectionId] = useState<string | null>(null);
+  const [addSeed, setAddSeed] = useState<{ file?: File; url?: string; x?: number; y?: number } | null>(null);
   const settlingIds = useRef(new Set<string>());
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
@@ -157,7 +169,7 @@ export function AdminBoard() {
     setPanelOpen(true);
   }
 
-  async function handleAdd(draft: AddItemDraft) {
+  async function handleAdd(draft: AddItemDraft & { x?: number; y?: number }) {
     setBusy(true);
     setFormError(null);
     try {
@@ -165,10 +177,16 @@ export function AdminBoard() {
       const center = viewportCenterOnCanvas(scale, window.scrollY, window.innerHeight);
       const section =
         sections.find((row) => row.id === draft.sectionId) ??
-        nearestSection(center.y, sections);
+        (draft.y != null
+          ? nearestSection(draft.y, sections)
+          : addSeed?.y != null
+            ? nearestSection(addSeed.y, sections)
+            : nearestSection(center.y, sections));
       const gravity = section ? sectionGravity(section) : center;
       const maxZ = items.reduce((max, item) => Math.max(max, item.z_index), 0);
       const id = crypto.randomUUID();
+      const dropX = draft.x ?? addSeed?.x;
+      const dropY = draft.y ?? addSeed?.y;
 
       let imagePath = '';
       let width = draft.width;
@@ -191,8 +209,8 @@ export function AdminBoard() {
         image_path: imagePath,
         image_width: width,
         image_height: height,
-        x: gravity.x,
-        y: gravity.y,
+        x: dropX ?? gravity.x,
+        y: dropY ?? gravity.y,
         scale: 1,
         rotation: 0,
         z_index: maxZ + 1,
@@ -200,7 +218,7 @@ export function AdminBoard() {
         section_id: section?.id ?? null,
       });
       let placed = created;
-      if (section) {
+      if (section && dropX == null) {
         const pose = await packNewItem({
           item: created,
           neighbors: itemsForSection(items, section, sections),
@@ -218,6 +236,7 @@ export function AdminBoard() {
       }
       setItems((prev) => [...prev, placed]);
       setSelectedId(placed.id);
+      setAddSeed(null);
       void kickSettle();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Could not add item.');
@@ -226,6 +245,30 @@ export function AdminBoard() {
       setBusy(false);
     }
   }
+
+  const handleBoardDrop = useCallback(
+    (payload: BoardDropPayload) => {
+      if (!payload.file && !payload.url) return;
+      const section = nearestSection(payload.y, sections);
+      setSelectedId(null);
+      setAddSectionId(section?.id ?? null);
+      setAddSeed({
+        file: payload.file,
+        url: payload.url,
+        x: payload.x,
+        y: payload.y,
+      });
+      setToolsTab('item');
+      setPanelOpen(true);
+    },
+    [sections],
+  );
+
+  const { over: dropOver } = useBoardDropAdd({
+    enabled: status === 'ready' && !busy,
+    zoom,
+    onDrop: handleBoardDrop,
+  });
 
   async function handleReplaceImage(prepared: PreparedImage) {
     if (!selected) return;
@@ -295,7 +338,12 @@ export function AdminBoard() {
   }
 
   return (
-    <div className="admin-page">
+    <div className={`admin-page${dropOver ? ' is-drop-target' : ''}`}>
+      {dropOver ? (
+        <div className="board-drop-hint" aria-hidden="true">
+          <span className="chrome-pill">drop to add</span>
+        </div>
+      ) : null}
       <AdminBar
         variant="shop"
         email={auth.email}
@@ -373,6 +421,7 @@ export function AdminBoard() {
                           )?.id ??
                           null
                         }
+                        seed={addSeed}
                         onSubmit={handleAdd}
                       />
                     </>
@@ -392,6 +441,22 @@ export function AdminBoard() {
                 ) : null}
                 {toolsTab === 'view' ? (
                   <ViewZoomSettings onPackingCommit={() => void kickSettle()} />
+                ) : null}
+                {toolsTab === 'inventory' ? (
+                  <InventoryPanel
+                    items={items.map((item) => ({ id: item.id, title: item.title }))}
+                    selectedId={selectedId}
+                    onSelect={(id) => {
+                      const item = items.find((row) => row.id === id);
+                      handleSelect(id);
+                      if (item) {
+                        window.scrollTo({
+                          top: scrollTopForCanvasY(item.y, zoom),
+                          behavior: 'smooth',
+                        });
+                      }
+                    }}
+                  />
                 ) : null}
               </div>
             ) : null}

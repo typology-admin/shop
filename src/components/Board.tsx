@@ -59,7 +59,11 @@ export function Board({
   onDragMoveItem,
   onDragEndItem,
 }: Props) {
-  const fit = useStageFit(items, zoom);
+  const fit = useStageFit(
+    items,
+    zoom,
+    wells.map((well) => well.y),
+  );
   const copies = mode === 'public' ? PUBLIC_BOARD_COPIES : 1;
   const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const [activeCopies, setActiveCopies] = useState<number[]>(() =>

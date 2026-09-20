@@ -1,24 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DEFAULT_BOARD_COLOR, DEFAULT_KNOLL_GAP, DEFAULT_KNOLL_ROTATION, MAX_KNOLL_GAP, MIN_KNOLL_GAP } from '../../shared/constants.ts';
-import { AddUserItemDialog } from '../components/AddUserItemDialog.tsx';
+import { AddUserItemDialog, type AddItemSeed, type NewItemInput } from '../components/AddUserItemDialog.tsx';
 import { AdminToolsRail, type ToolsTab } from '../components/AdminToolsRail.tsx';
 import { Board } from '../components/Board.tsx';
 import { BoardColorField } from '../components/BoardColorField.tsx';
+import { BoardThumbnailField } from '../components/BoardThumbnailField.tsx';
 import { BusyOverlay } from '../components/BusyOverlay.tsx';
 import { CutoutEditor } from '../components/CutoutEditor.tsx';
+import { InventoryPanel } from '../components/InventoryPanel.tsx';
 import { ShareBoardDialog } from '../components/ShareBoardDialog.tsx';
+import { SectionRail } from '../components/SectionRail.tsx';
 import { UserSectionPanel } from '../components/UserSectionPanel.tsx';
 import { useAuth } from '../hooks/useAuth.ts';
+import { useBoardDropAdd } from '../hooks/useBoardDropAdd.ts';
 import { useGravitySettle } from '../hooks/useGravitySettle.ts';
 import { useBoardZoom } from '../hooks/useSiteSettings.ts';
+import { useWellScrollSnap } from '../hooks/useWellScrollSnap.ts';
+import type { BoardDropPayload } from '../lib/boardDrop.ts';
+import { scrollTopForCanvasY } from '../lib/canvas.ts';
 import { beginCutout, finalizeCutout, type CutoutSession } from '../lib/cutout.ts';
 import { fetchImageBlob, forgetImageUrl, openAffiliate } from '../lib/images.ts';
 import { uploadPng } from '../lib/items.ts';
 import { forgetSharedProductImage } from '../lib/productImageCache.ts';
 import { fetchPublicProfile } from '../lib/profile.ts';
 import { toCanvasItem, userWells } from '../lib/userBoardMap.ts';
-import type { NewItemInput } from '../components/AddUserItemDialog.tsx';
 import {
   addItem,
   claimItem,
@@ -67,6 +73,7 @@ export function UserBoardPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addSectionId, setAddSectionId] = useState<string | null>(null);
+  const [addSeed, setAddSeed] = useState<AddItemSeed | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [cutoutSession, setCutoutSession] = useState<CutoutSession | null>(null);
@@ -74,6 +81,7 @@ export function UserBoardPage() {
   const [toolsTab, setToolsTab] = useState<ToolsTab | null>(null);
   const [arrangingId, setArrangingId] = useState<string | null>(null);
   const [knollGap, setKnollGap] = useState(readPackGap);
+  const [thumbBusy, setThumbBusy] = useState(false);
   const [claimName, setClaimName] = useState('');
   const [suggestNote, setSuggestNote] = useState('');
   const [suggestUrl, setSuggestUrl] = useState('');
@@ -170,7 +178,14 @@ export function UserBoardPage() {
   );
 
   const wells = useMemo(() => userWells(sections), [sections]);
+  const wellYs = useMemo(() => sections.map((section) => section.y), [sections]);
   const canvasItems = useMemo(() => items.filter((item) => itemImageSrcSafe(item)).map(toCanvasItem), [items]);
+
+  useWellScrollSnap({
+    wellYs,
+    zoom,
+    enabled: status === 'ready' && wellYs.length > 0,
+  });
 
   const gravity = useGravitySettle({
     items: canvasItems,
@@ -214,10 +229,36 @@ export function UserBoardPage() {
         section_id: input.section_id ?? section?.id ?? null,
       });
       setItems((list) => [...list, created]);
+      setSelectedId(created.id);
+      setToolsTab('item');
     } finally {
       setAdding(false);
     }
   }
+
+  const handleBoardDrop = useCallback(
+    (payload: BoardDropPayload) => {
+      if (!owner || addOpen) return;
+      if (!payload.file && !payload.url) return;
+      const sectionId = nearestSectionId(payload.x, payload.y, sections);
+      setAddSectionId(sectionId);
+      setAddSeed({
+        file: payload.file,
+        url: payload.url,
+        x: payload.x,
+        y: payload.y,
+      });
+      setAddOpen(true);
+      setToolsTab('item');
+    },
+    [addOpen, owner, sections],
+  );
+
+  const { over: dropOver } = useBoardDropAdd({
+    enabled: owner && status === 'ready' && !addOpen && !cutoutSession,
+    zoom,
+    onDrop: handleBoardDrop,
+  });
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const selectedClaimed = claims.some((claim) => claim.item_id === selectedId);
@@ -285,7 +326,7 @@ export function UserBoardPage() {
           <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">{error ?? 'This board is missing or private.'}</p>
           <p className="hint">
-            <Link to="/">Shop</Link>
+            <Link to="/">home</Link>
             {' · '}
             <Link to="/me">Your boards</Link>
           </p>
@@ -295,22 +336,21 @@ export function UserBoardPage() {
   }
 
   return (
-    <div className="user-board-page">
+    <div className={`user-board-page${dropOver ? ' is-drop-target' : ''}`}>
+      {dropOver ? (
+        <div className="board-drop-hint" aria-hidden="true">
+          <span className="chrome-pill">drop to add</span>
+        </div>
+      ) : null}
       {owner ? (
-        <header className="admin-bar">
-          <Link className="admin-bar-brand" to={username ? `/u/${ownerName}` : '/me'}>
-            {ownerName} / {board.slug}
-          </Link>
+        <div className="user-board-owner-strip">
           <span className="admin-bar-meta">
+            {ownerName} / {board.slug}
+            {' · '}
             {save === 'saving' ? 'Saving…' : save === 'error' ? 'Save failed' : 'Saved'}
           </span>
-          <div className="admin-bar-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => setShareOpen(true)}>
-              share
-            </button>
-          </div>
-        </header>
-      ) : (
+        </div>
+      ) : auth.session ? null : (
         <header className="user-board-chrome">
           <Link className="chrome-pill" to={username ? `/u/${ownerName}` : '/'}>
             {ownerName}
@@ -336,6 +376,7 @@ export function UserBoardPage() {
               active={toolsTab}
               itemActive={Boolean(selected)}
               onSelect={handleToolsTab}
+              onShare={() => setShareOpen(true)}
             />
             {toolsTab ? (
               <div className="admin-panel-body">
@@ -422,13 +463,46 @@ export function UserBoardPage() {
                   />
                 ) : null}
                 {toolsTab === 'view' ? (
-                  <BoardColorField
-                    value={boardColor}
-                    onChange={(background_color) => {
-                      setBoard((current) => (current ? { ...current, background_color } : current));
-                    }}
-                    onCommit={(background_color) => {
-                      void updateBoard(board.id, { background_color }).then(setBoard);
+                  <>
+                    <BoardColorField
+                      value={boardColor}
+                      onChange={(background_color) => {
+                        setBoard((current) => (current ? { ...current, background_color } : current));
+                      }}
+                      onCommit={(background_color) => {
+                        void updateBoard(board.id, { background_color }).then(setBoard);
+                      }}
+                    />
+                    <BoardThumbnailField
+                      value={board.thumbnail_emoji}
+                      busy={thumbBusy}
+                      onChange={(thumbnail_emoji) => {
+                        setThumbBusy(true);
+                        setError(null);
+                        void updateBoard(board.id, { thumbnail_emoji })
+                          .then(setBoard)
+                          .catch((err) => {
+                            setError(err instanceof Error ? err.message : 'Could not update thumbnail.');
+                          })
+                          .finally(() => setThumbBusy(false));
+                      }}
+                    />
+                  </>
+                ) : null}
+                {toolsTab === 'inventory' ? (
+                  <InventoryPanel
+                    items={items.map((item) => ({ id: item.id, title: item.title }))}
+                    selectedId={selectedId}
+                    onSelect={(id) => {
+                      const item = items.find((row) => row.id === id);
+                      setSelectedId(id);
+                      setToolsTab('item');
+                      if (item) {
+                        window.scrollTo({
+                          top: scrollTopForCanvasY(item.y, zoom),
+                          behavior: 'smooth',
+                        });
+                      }
                     }}
                   />
                 ) : null}
@@ -438,13 +512,24 @@ export function UserBoardPage() {
         </>
       ) : null}
 
+      {sections.length > 0 ? (
+        <SectionRail
+          sections={sections.map((section) => ({
+            id: section.id,
+            name: section.title,
+            y: section.y,
+            sortOrder: section.sort_order,
+          }))}
+        />
+      ) : null}
+
       <Board
         items={canvasItems}
         mode={owner ? 'admin' : 'public'}
         zoom={zoom}
         selectedId={selectedId}
         backgroundColor={boardColor}
-        wells={owner ? wells : []}
+        wells={wells}
         onAddAtWell={
           owner
             ? (sectionId) => {
@@ -583,9 +668,11 @@ export function UserBoardPage() {
         accessToken={auth.session?.access_token ?? null}
         sections={sections}
         defaultSectionId={addSectionId}
+        seed={addSeed}
         onClose={() => {
           setAddOpen(false);
           setAddSectionId(null);
+          setAddSeed(null);
         }}
         onSubmit={onAdd}
       />

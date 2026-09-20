@@ -1,4 +1,4 @@
-import { useEffect, useState, type ClipboardEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent } from 'react';
 import { beginCutout, finalizeCutout, type CutoutSession } from '../lib/cutout.ts';
 import { fetchProductDraft } from '../lib/productFetch.ts';
 import { uploadPng } from '../lib/items.ts';
@@ -8,12 +8,20 @@ import { CutoutEditor } from './CutoutEditor.tsx';
 
 export type NewItemInput = Partial<UserBoardItem> & { title: string };
 
+export type AddItemSeed = {
+  file?: File;
+  url?: string;
+  x?: number;
+  y?: number;
+};
+
 type Props = {
   open: boolean;
   busy: boolean;
   accessToken: string | null;
   sections: UserBoardSection[];
   defaultSectionId?: string | null;
+  seed?: AddItemSeed | null;
   onClose: () => void;
   onSubmit: (input: NewItemInput) => Promise<void>;
 };
@@ -28,6 +36,7 @@ export function AddUserItemDialog({
   accessToken,
   sections,
   defaultSectionId = null,
+  seed = null,
   onClose,
   onSubmit,
 }: Props) {
@@ -44,13 +53,38 @@ export function AddUserItemDialog({
   const [blocked, setBlocked] = useState(false);
   const [session, setSession] = useState<CutoutSession | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const seedKey = useRef<string | null>(null);
+  const dropPoint = useRef<{ x?: number; y?: number }>({});
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seedKey.current = null;
+      dropPoint.current = {};
+      return;
+    }
     document.documentElement.classList.add('account-modal-open');
     setSectionId(defaultSectionId ?? sections[0]?.id ?? '');
     return () => document.documentElement.classList.remove('account-modal-open');
   }, [open, defaultSectionId, sections]);
+
+  useEffect(() => {
+    if (!open || !seed) return;
+    const key = seed.url ?? (seed.file ? `file:${seed.file.name}:${seed.file.size}:${seed.file.lastModified}` : '');
+    if (!key || seedKey.current === key) return;
+    seedKey.current = key;
+    dropPoint.current = { x: seed.x, y: seed.y };
+
+    if (seed.url) {
+      setUrl(seed.url);
+      void runFetch(seed.url);
+      return;
+    }
+    if (seed.file) {
+      void onFile(seed.file);
+    }
+    // Intentionally run once per seed identity while open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, seed]);
 
   if (!open) return null;
 
@@ -67,6 +101,8 @@ export function AddUserItemDialog({
     setBlocked(false);
     setSession(null);
     setEditorOpen(false);
+    seedKey.current = null;
+    dropPoint.current = {};
   }
 
   async function adoptBlob(blob: Blob, name: string) {
@@ -102,7 +138,7 @@ export function AddUserItemDialog({
 
   async function runFetch(rawUrl: string) {
     const next = rawUrl.trim();
-    if (!next || working || busy) return;
+    if (!next || busy) return;
     setError(null);
     setBlocked(false);
     setWorking('Fetching…');
@@ -141,6 +177,10 @@ export function AddUserItemDialog({
     setWorking('Preparing image…');
     try {
       await adoptBlob(next, next.name);
+      setTitle((current) => {
+        if (current.trim()) return current;
+        return next.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not read that image.');
     } finally {
@@ -175,6 +215,8 @@ export function AddUserItemDialog({
         image_width: imageWidth,
         image_height: imageHeight,
         section_id: sectionId || null,
+        x: dropPoint.current.x,
+        y: dropPoint.current.y,
       });
       reset();
       onClose();

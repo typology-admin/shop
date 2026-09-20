@@ -63,7 +63,7 @@ export function AdminLogin() {
             className={tab === 'shop' ? 'is-active' : undefined}
             onClick={() => setTab('shop')}
           >
-            Shop
+            Home
           </button>
           <button
             type="button"

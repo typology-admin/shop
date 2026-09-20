@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { AccountBar } from '../components/AccountBar.tsx';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.ts';
 import { hasSupabaseConfig } from '../lib/env.ts';
 import { fetchPublicProfile, type Profile } from '../lib/profile.ts';
@@ -9,7 +8,6 @@ import { listPublicBoards, type UserBoard } from '../lib/userBoards.ts';
 export function UserProfile() {
   const { username = '' } = useParams();
   const auth = useAuth();
-  const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [boards, setBoards] = useState<UserBoard[]>([]);
   const [status, setStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -50,24 +48,21 @@ export function UserProfile() {
     }
   }, [profile]);
 
-  const nav = (
-    <AccountBar
-      email={auth.session ? auth.email : null}
-      signedIn={Boolean(auth.session)}
-      onSignOut={
-        auth.session
-          ? () => {
-              void auth.signOut().then(() => navigate('/login'));
-            }
-          : undefined
-      }
-    />
+  const signedInChrome = auth.session ? null : (
+    <header className="user-board-chrome">
+      <Link className="chrome-pill" to="/">
+        typology network
+      </Link>
+      <Link className="chrome-pill" to="/login">
+        sign in
+      </Link>
+    </header>
   );
 
   if (status === 'loading') {
     return (
       <div className="loading-screen">
-        {nav}
+        {signedInChrome}
         <div>
           <div className="loading-mark" />
           <p className="lede">Looking up @{username}…</p>
@@ -79,7 +74,7 @@ export function UserProfile() {
   if (status !== 'ready' || !profile) {
     return (
       <div className="empty-screen">
-        {nav}
+        {signedInChrome}
         <div>
           <h1 className="wordmark wordmark-ui">typology network</h1>
           <p className="lede">
@@ -94,7 +89,7 @@ export function UserProfile() {
 
   return (
     <div className="account-page">
-      {nav}
+      {signedInChrome}
       <div className="account-wrap">
         <p className="auth-kicker">@{profile.username}</p>
         <h1 className="wordmark wordmark-ui">{profile.display_name || profile.username}</h1>
@@ -103,8 +98,15 @@ export function UserProfile() {
         ) : (
           <ul className="account-board-list">
             {boards.map((board) => (
-              <li key={board.id}>
-                <Link to={`/u/${profile.username}/${board.slug}`}>{board.title}</Link>
+              <li key={board.id} className="account-board-tile">
+                <span className="account-board-thumb" aria-hidden="true">
+                  {board.thumbnail_emoji || '▢'}
+                </span>
+                <div className="account-board-tile-main">
+                  <Link className="account-board-title" to={`/u/${profile.username}/${board.slug}`}>
+                    {board.title}
+                  </Link>
+                </div>
               </li>
             ))}
           </ul>

@@ -7,6 +7,7 @@ import {
   updateBoardSection,
   type BoardSection,
 } from '../lib/sections.ts';
+import { resolveWellY } from '../lib/wells.ts';
 
 type Props = {
   sections: BoardSection[];
@@ -32,6 +33,11 @@ export function SectionManager({
     return viewportCenterOnCanvas(scale, window.scrollY, window.innerHeight).y;
   }
 
+  function freeY(excludeId?: string) {
+    const occupied = sections.filter((row) => row.id !== excludeId).map((row) => row.y);
+    return resolveWellY(currentY(), occupied);
+  }
+
   async function onAdd(event: FormEvent) {
     event.preventDefault();
     const label = name.trim();
@@ -40,7 +46,7 @@ export function SectionManager({
     try {
       const created = await insertBoardSection({
         name: label,
-        y: currentY(),
+        y: freeY(),
         sortOrder: sections.length,
       });
       onChange([...sections, created].sort((a, b) => a.y - b.y));
@@ -117,7 +123,7 @@ export function SectionManager({
               type="button"
               className="btn btn-ghost"
               onClick={() => {
-                const y = currentY();
+                const y = freeY(section.id);
                 onChange(sections.map((row) => (row.id === section.id ? { ...row, y } : row)));
                 void updateBoardSection(section, { y });
               }}

@@ -8,6 +8,7 @@ import { SiteChrome } from '../components/SiteChrome.tsx';
 import { SiteFooter } from '../components/SiteFooter.tsx';
 import { useBoardSections } from '../hooks/useBoardSections.ts';
 import { useInfiniteWindowScroll } from '../hooks/useInfiniteWindowScroll.ts';
+import { useWellScrollSnap } from '../hooks/useWellScrollSnap.ts';
 import { useItems } from '../hooks/useItems.ts';
 import { useNetworkItems } from '../hooks/useNetworkItems.ts';
 import { useBoardZoom, useSiteSettings } from '../hooks/useSiteSettings.ts';
@@ -26,8 +27,15 @@ export function PublicBoard() {
   const selectedId = params.get('item');
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const looping = status === 'ready' && items.length > 0;
+  const wellYs = sections.map((section) => section.y);
 
   useInfiniteWindowScroll(looping, PUBLIC_BOARD_COPIES);
+  useWellScrollSnap({
+    wellYs,
+    zoom,
+    enabled: status === 'ready' && wellYs.length > 0,
+    loopCopies: looping ? PUBLIC_BOARD_COPIES : 1,
+  });
 
   useEffect(() => {
     const root = document.documentElement;

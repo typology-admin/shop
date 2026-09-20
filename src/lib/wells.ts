@@ -10,6 +10,28 @@ export type GravityWell = {
 
 export const WELL_COLORS = ['#c8553d', '#3d7ea6', '#5b8c5a', '#b08d2f', '#7a5aa6'];
 
+/** Minimum canvas-Y gap between gravity wells so scenes never stack. */
+export const MIN_WELL_GAP = 700;
+
+/**
+ * Nudge a desired well Y so it stays at least `minGap` away from every other well.
+ * Prefer pushing downward when colliding (keeps scroll order stable).
+ */
+export function resolveWellY(
+  desiredY: number,
+  occupiedYs: number[],
+  minGap: number = MIN_WELL_GAP,
+): number {
+  let y = desiredY;
+  const sorted = [...occupiedYs].sort((a, b) => a - b);
+  for (const oy of sorted) {
+    if (Math.abs(y - oy) < minGap) {
+      y = oy + minGap;
+    }
+  }
+  return y;
+}
+
 /** One well per section: window-horizontal center, section vertical center. */
 export function wellForSection(section: BoardSection): GravityWell {
   return {

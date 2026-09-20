@@ -16,6 +16,7 @@ import { mailtoHref } from '../lib/siteSettings.ts';
 import { itemMatchesQuery } from '../lib/tags.ts';
 import type { Item } from '../lib/types.ts';
 import type { BoardSection } from '../lib/sections.ts';
+import { HeaderChromePortal } from './HeaderChrome.tsx';
 
 type Hit =
   | { kind: 'shop'; item: Item }
@@ -59,6 +60,7 @@ export function SiteChrome({
 }: Props) {
   const navigate = useNavigate();
   const auth = useAuth();
+  const signedIn = Boolean(auth.session);
   const { settings } = useSiteSettings();
   const isMobile = useMediaQuery(`(max-width: ${MOBILE_BREAKPOINT}px)`);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -85,11 +87,12 @@ export function SiteChrome({
       }
     }
     function onPointer(event: MouseEvent) {
-      if (!wrapRef.current?.contains(event.target as Node)) {
-        setSearchOpen(false);
-        setAboutOpen(false);
-        setMenuOpen(false);
-      }
+      const target = event.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if ((target as Element).closest?.('.admin-bar-extras')) return;
+      setSearchOpen(false);
+      setAboutOpen(false);
+      setMenuOpen(false);
     }
     window.addEventListener('keydown', onKey);
     window.addEventListener('mousedown', onPointer);
@@ -293,8 +296,14 @@ export function SiteChrome({
   );
 
   return (
-    <div className="site-chrome" ref={wrapRef}>
-      {isMobile ? (
+    <div className={`site-chrome${signedIn ? ' is-docked' : ''}`} ref={wrapRef}>
+      {signedIn ? (
+        <HeaderChromePortal>
+          {searchControl}
+          {aboutControl}
+        </HeaderChromePortal>
+      ) : null}
+      {isMobile && !signedIn ? (
         <button
           type="button"
           className={`chrome-search-toggle chrome-menu-toggle${menuOpen ? ' is-open' : ''}`}
@@ -310,24 +319,22 @@ export function SiteChrome({
         </button>
       ) : null}
 
-      <div className={`chrome-actions${isMobile && menuOpen ? ' is-open' : ''}`}>
-        {searchControl}
-        {variant === 'network' ? (
-          <Link className="chrome-pill" to="/">
-            shop
-          </Link>
-        ) : null}
-        {aboutControl}
-        {auth.session ? (
-          <Link className="chrome-pill" to="/me">
-            {auth.profile?.username ? `@${auth.profile.username}` : 'account'}
-          </Link>
-        ) : !auth.isLocal ? (
-          <Link className="chrome-pill" to="/login">
-            sign in
-          </Link>
-        ) : null}
-      </div>
+      {signedIn ? null : (
+        <div className={`chrome-actions${isMobile && menuOpen ? ' is-open' : ''}`}>
+          {searchControl}
+          {variant === 'network' ? (
+            <Link className="chrome-pill" to="/">
+              home
+            </Link>
+          ) : null}
+          {aboutControl}
+          {!auth.isLocal ? (
+            <Link className="chrome-pill" to="/login">
+              sign in
+            </Link>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ export function AdminTabs() {
   return (
     <nav className="admin-tabs" aria-label="Admin sections">
       <NavLink to="/admin" end className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
-        Shop
+        Home
       </NavLink>
       <NavLink
         to="/admin/network"

@@ -52,16 +52,19 @@ export function boardHeight(
   viewportWidth: number,
   viewportHeight: number,
   zoom = activeViewZoom,
+  anchorYs: number[] = [],
 ): number {
   const scale = boardScale(viewportWidth, zoom);
   const fillViewport = scale > 0 ? viewportHeight / scale : MIN_CANVAS_HEIGHT;
-  if (items.length === 0) {
+  const anchorBottom = anchorYs.reduce((max, y) => Math.max(max, y), 0);
+  const bottom = Math.max(contentBottom(items), anchorBottom);
+  if (items.length === 0 && anchorYs.length === 0) {
     return Math.max(fillViewport, 1);
   }
   return Math.max(
     MIN_CANVAS_HEIGHT,
     fillViewport,
-    contentBottom(items) + CANVAS_BOTTOM_PAD,
+    bottom + CANVAS_BOTTOM_PAD,
   );
 }
 

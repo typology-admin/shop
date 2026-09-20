@@ -17,6 +17,14 @@ body.is-network {
   pointer-events: none;
 }
 
+.site-chrome.is-docked {
+  display: none;
+}
+
+body.has-account-bar .site-chrome:not(.is-docked) {
+  top: calc(var(--bar-h) + 10px);
+}
+
 .site-chrome > * {
   pointer-events: auto;
 }
@@ -536,6 +544,10 @@ body.is-network {
     top: 10px;
     right: 10px;
     left: auto;
+  }
+
+  body.has-account-bar .site-chrome {
+    top: calc(var(--bar-h) + 8px);
   }
 
   .chrome-menu-toggle {

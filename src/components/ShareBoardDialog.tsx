@@ -61,6 +61,9 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
   return (
     <div className="account-modal-backdrop" onClick={onClose}>
       <div className="account-modal" role="dialog" aria-label="Share" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="account-modal-close" aria-label="Close" onClick={onClose}>
+          <IconClose />
+        </button>
         <h2>Share</h2>
         <p className="lede">{board.title}</p>
         <div className="btn-row">
@@ -94,9 +97,6 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
               Rotate link
             </button>
           ) : null}
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            Close
-          </button>
         </div>
         <label className="field field-check">
           <input
@@ -117,5 +117,13 @@ export function ShareBoardDialog({ board, username, onClose, onVisibility, onFla
         {error ? <p className="form-error">{error}</p> : null}
       </div>
     </div>
+  );
+}
+
+function IconClose() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M3 3l8 8M11 3 3 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }

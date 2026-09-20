@@ -10,7 +10,7 @@ function viewport() {
   };
 }
 
-export function useStageFit(items: Item[], zoom: number) {
+export function useStageFit(items: Item[], zoom: number, anchorYs: number[] = []) {
   const [size, setSize] = useState(viewport);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export function useStageFit(items: Item[], zoom: number) {
   }, [zoom]);
 
   const scale = boardScale(size.width, zoom);
-  const canvasHeight = boardHeight(items, size.width, size.height, zoom);
+  const canvasHeight = boardHeight(items, size.width, size.height, zoom, anchorYs);
   const drawnWidth = CANVAS_WIDTH * scale;
 
   return {

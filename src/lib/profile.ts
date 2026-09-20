@@ -129,3 +129,18 @@ export async function claimUsername(userId: string, raw: string): Promise<Profil
   }
   return asProfile(data as ProfileRow);
 }
+
+export async function updateDisplayName(userId: string, raw: string): Promise<Profile> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const full_name = raw.trim().slice(0, 80);
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ full_name: full_name || null })
+    .eq('id', userId)
+    .select('id, username, full_name')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Could not save the display name.');
+  return asProfile(data as ProfileRow);
+}

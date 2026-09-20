@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSiteSettings } from '../hooks/useSiteSettings.ts';
 import { loopScrollProgress, scrollFractionForCanvasY, scrollTopForCanvasY } from '../lib/canvas.ts';
-import type { BoardSection } from '../lib/sections.ts';
+
+export type SectionRailItem = {
+  id: string;
+  name: string;
+  y: number;
+  sortOrder?: number;
+  items?: Array<{ emoji: string; label: string }>;
+};
 
 type Props = {
-  sections: BoardSection[];
+  sections: SectionRailItem[];
 };
 
 export function SectionRail({ sections }: Props) {
@@ -43,7 +50,7 @@ export function SectionRail({ sections }: Props) {
     };
   }, [hideMs]);
 
-  const ranked = [...sections].sort((a, b) => a.y - b.y || a.sortOrder - b.sortOrder);
+  const ranked = [...sections].sort((a, b) => a.y - b.y || (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
   function holdOpen() {
     hovering.current = true;
@@ -70,13 +77,13 @@ export function SectionRail({ sections }: Props) {
         <div className={`section-hooks${visible ? ' is-visible' : ''}`}>
           {ranked.map((section) => {
             const t = scrollFractionForCanvasY(section.y);
-            const kit = section.items.map((item) => `${item.emoji} ${item.label}`).join(' · ');
+            const kit = (section.items ?? []).map((item) => `${item.emoji} ${item.label}`).join(' · ');
             return (
               <button
                 key={section.id}
                 type="button"
                 className="section-hook chrome-pill"
-                title={kit}
+                title={kit || section.name}
                 style={{ top: `${Math.min(96, Math.max(4, t * 100))}%` }}
                 onPointerEnter={holdOpen}
                 onPointerLeave={releaseOpen}

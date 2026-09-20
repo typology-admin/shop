@@ -23,6 +23,7 @@ type Props = {
   accessToken?: string | null;
   sections?: Array<{ id: string; name: string }>;
   defaultSectionId?: string | null;
+  seed?: { file?: File; url?: string } | null;
   onSubmit: (draft: AddItemDraft) => Promise<void>;
 };
 
@@ -32,6 +33,7 @@ export function AddItemForm({
   accessToken = null,
   sections = [],
   defaultSectionId = null,
+  seed = null,
   onSubmit,
 }: Props) {
   const [title, setTitle] = useState('');
@@ -48,10 +50,28 @@ export function AddItemForm({
   const [contentOk, setContentOk] = useState(false);
   const sourceRef = useRef<'upload' | 'url' | null>(null);
   const generation = useRef(0);
+  const seedKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (defaultSectionId) setSectionId(defaultSectionId);
   }, [defaultSectionId]);
+
+  useEffect(() => {
+    if (!seed) return;
+    const key = seed.url ?? (seed.file ? `file:${seed.file.name}:${seed.file.size}:${seed.file.lastModified}` : '');
+    if (!key || seedKey.current === key) return;
+    seedKey.current = key;
+    if (seed.url) {
+      setAffiliateUrl(seed.url);
+      void loadFromUrl(seed.url).catch((err) => {
+        if (err instanceof Error && err.message === 'Cancelled.') return;
+        setLocalError(err instanceof Error ? err.message : 'Could not fetch a product image.');
+      });
+      return;
+    }
+    if (seed.file) void handleFile(seed.file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   useEffect(() => {
     if (!prepared) {
