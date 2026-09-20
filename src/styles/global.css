@@ -1138,6 +1138,39 @@ html.cutout-editor-open .admin-page {
   text-transform: uppercase;
 }
 
+.oauth-row {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-panel .oauth-btn {
+  width: 100%;
+  gap: 10px;
+  justify-content: center;
+}
+
+.oauth-logo {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.auth-panel .check-field {
+  margin-top: 16px;
+}
+
+.auth-back-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.auth-panel .auth-back {
+  width: auto;
+  min-width: 5.5rem;
+  gap: 6px;
+  text-decoration: none;
+}
+
 .account-page {
   min-height: 100vh;
   padding: calc(var(--bar-h) + 40px) 24px 48px;

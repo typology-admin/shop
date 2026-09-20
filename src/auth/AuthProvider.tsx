@@ -22,6 +22,7 @@ export type AuthState = {
   signIn: (email: string, password: string) => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithFacebook: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   claimUsername: (username: string) => Promise<void>;
@@ -133,6 +134,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const signInWithFacebook = useCallback(async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      throw new Error('Accounts need Supabase credentials.');
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'facebook',
+      options: { redirectTo: authRedirectUrl() },
+    });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) {
@@ -174,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithMagicLink,
       signInWithGoogle,
+      signInWithFacebook,
       signOut,
       refreshProfile,
       claimUsername,
@@ -189,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signInWithMagicLink,
       signInWithGoogle,
+      signInWithFacebook,
       signOut,
       refreshProfile,
       claimUsername,

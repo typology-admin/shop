@@ -1,47 +1,56 @@
 import { useEffect, useState } from 'react';
-import { resolveImageUrl } from '../lib/images.ts';
+import {
+  forgetSharedProductImage,
+  loadSharedProductImage,
+  peekSharedProductImage,
+} from '../lib/productImageCache.ts';
 
-export function useProductImage(imagePath: string, revision = 0) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
+export function useProductImage(
+  imagePath: string,
+  revision = 0,
+  options: { enabled?: boolean } = {},
+) {
+  const enabled = options.enabled !== false;
+  const peeked = enabled ? peekSharedProductImage(imagePath, revision) : null;
+  const [image, setImage] = useState<HTMLImageElement | null>(peeked);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'loaded' | 'failed'>(
+    peeked ? 'loaded' : enabled ? 'loading' : 'idle',
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    let element: HTMLImageElement | null = null;
+    if (!enabled) {
+      setImage(null);
+      setStatus('idle');
+      return;
+    }
 
+    const warm = peekSharedProductImage(imagePath, revision);
+    if (warm) {
+      setImage(warm);
+      setStatus('loaded');
+      return;
+    }
+
+    let cancelled = false;
     setImage(null);
     setStatus('loading');
 
-    void resolveImageUrl(imagePath).then((url) => {
-      if (cancelled || !url) {
-        if (!cancelled) setStatus('failed');
-        return;
-      }
-      element = new window.Image();
-      if (url.startsWith('http://') || url.startsWith('https://')) {
-        element.crossOrigin = 'anonymous';
-      }
-      element.onload = () => {
+    void loadSharedProductImage(imagePath, revision)
+      .then((next) => {
         if (cancelled) return;
-        setImage(element);
+        setImage(next);
         setStatus('loaded');
-      };
-      element.onerror = () => {
+      })
+      .catch(() => {
         if (cancelled) return;
         setImage(null);
         setStatus('failed');
-      };
-      element.src = url;
-    });
+      });
 
     return () => {
       cancelled = true;
-      if (element) {
-        element.onload = null;
-        element.onerror = null;
-      }
     };
-  }, [imagePath, revision]);
+  }, [imagePath, revision, enabled]);
 
-  return { image, status };
+  return { image, status, forget: () => forgetSharedProductImage(imagePath, revision) };
 }

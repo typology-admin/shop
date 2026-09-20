@@ -4,6 +4,7 @@ import { Image as KonvaImage, Transformer } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { Image as KonvaImageNode } from 'konva/lib/shapes/Image';
 import type { Transformer as KonvaTransformerNode } from 'konva/lib/shapes/Transformer';
+import { useNearViewport } from '../hooks/useNearViewport.ts';
 import { useProductImage } from '../hooks/useProductImage.ts';
 import { clampScale } from '../lib/canvas.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
@@ -12,9 +13,12 @@ type Props = {
   item: Item;
   mode: 'public' | 'admin';
   selected: boolean;
+  /** Absolute canvas Y including loop-copy offset (for viewport culling). */
+  worldY: number;
+  stageScale: number;
   onSelect: (id: string) => void;
   onCommit: (id: string, patch: ItemPatch) => void;
-  onLoaded: (id: string, ok: boolean) => void;
+  onLoaded?: (id: string, ok: boolean) => void;
   onDragStartItem?: (id: string) => void;
   onDragMoveItem?: (id: string, x: number, y: number) => void;
   onDragEndItem?: (id: string, x: number, y: number) => void;
@@ -24,6 +28,8 @@ export function ProductNode({
   item,
   mode,
   selected,
+  worldY,
+  stageScale,
   onSelect,
   onCommit,
   onLoaded,
@@ -33,19 +39,31 @@ export function ProductNode({
 }: Props) {
   const nodeRef = useRef<KonvaImageNode>(null);
   const transformerRef = useRef<KonvaTransformerNode>(null);
-  const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0);
+  const extent = Math.max(item.image_width, item.image_height) * item.scale * 0.6;
+  const near = useNearViewport(worldY, extent, stageScale);
+  const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0, {
+    enabled: near,
+  });
 
   useLayoutEffect(() => {
-    onLoaded(item.id, status === 'loaded');
+    if (!onLoaded) return;
+    if (status === 'loaded') onLoaded(item.id, true);
+    else if (status === 'failed') onLoaded(item.id, false);
   }, [item.id, onLoaded, status]);
 
   useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node || !image) return;
-    node.cache();
+    // Public clicks can use the AABB hit region — alpha caches are expensive at board scale.
+    if (mode === 'public') {
+      node.clearCache();
+      node.getLayer()?.batchDraw();
+      return;
+    }
+    node.cache({ pixelRatio: Math.min(1, 1 / Math.max(0.35, stageScale)) });
     node.drawHitFromCache(HIT_ALPHA_THRESHOLD);
     node.getLayer()?.batchDraw();
-  }, [image]);
+  }, [image, mode, stageScale]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;
@@ -131,18 +149,9 @@ export function ProductNode({
         <Transformer
           ref={transformerRef}
           rotateEnabled
-          flipEnabled={false}
-          keepRatio
           enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
-          anchorSize={10}
-          anchorStroke="#1c1b18"
-          anchorFill="#efece3"
-          borderStroke="#1c1b18"
-          rotateAnchorOffset={22}
           boundBoxFunc={(oldBox, newBox) => {
-            if (Math.abs(newBox.width) < 12 || Math.abs(newBox.height) < 12) {
-              return oldBox;
-            }
+            if (newBox.width < 20 || newBox.height < 20) return oldBox;
             return newBox;
           }}
         />
