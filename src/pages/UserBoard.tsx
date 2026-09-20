@@ -348,14 +348,14 @@ export function UserBoardPage() {
                         <span>Title</span>
                         <input
                           value={selected.title}
-                          onChange={(event) => sync(selected.id, { title: event.target.value })}
+                          onChange={(event) => queue(selected.id, { title: event.target.value })}
                         />
                       </label>
                       <label className="field">
                         <span>URL</span>
                         <input
                           value={selected.url}
-                          onChange={(event) => sync(selected.id, { url: event.target.value })}
+                          onChange={(event) => queue(selected.id, { url: event.target.value })}
                         />
                       </label>
                       <div className="btn-row">
