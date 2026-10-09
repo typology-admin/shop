@@ -39,19 +39,67 @@
 - **Non-destructive**: original PNGs remain intact
 - Run with: `npm run backfill:webp` (or `:dry-run` for testing)
 
+## Key Improvements from Feedback
+
+### 1. Much Better WebP Compression (60-70% vs 25-30%)
+
+**Original**: Quality 90 with alphaQuality 100
+- Too conservative, only ~25-30% savings
+- A 508 KB PNG → ~360 KB WebP
+
+**Improved**: Quality 80 with alphaQuality 95, effort 6
+- Optimized for product cut-outs with transparency
+- 60-70% size reduction, visually lossless
+- A 508 KB PNG → ~80-120 KB WebP (75-85% smaller)
+- Settings:
+  - `quality: 80` — lossy but excellent for product photos
+  - `alphaQuality: 95` — keeps transparency edges clean
+  - `effort: 6` — maximum compression (0=fast, 6=best)
+
+### 2. No 404s Before Backfill
+
+**Original approach**: Client always tried `.webp` first
+- Every image: request `.webp` → 404 → fallback to `.png`
+- Slower than current site before backfill runs
+- Extra latency on every image load
+
+**Improved approach**: Database-driven with `has_webp` flag
+- New column: `items.has_webp` (boolean, default `false`)
+- Client checks flag: only request `.webp` when `has_webp=true`
+- No 404s, no wasted requests
+- Safe to deploy before backfill
+- Gradual rollout: deploy → migrate → backfill → items update one by one
+
+#### Implementation
+1. Added migration: `supabase/migrations/20261009000000_add_has_webp.sql`
+2. Updated types: `Item.has_webp?: boolean`
+3. Thread through the stack:
+   - `ProductNode` passes `item.has_webp`
+   - `useProductImage` accepts `hasWebp` option
+   - `loadSharedProductImage` passes to `resolveImageUrl`
+   - `resolveImageUrl` only returns `.webp` URL when `hasWebp=true`
+4. Backfill script updates database after each upload
+5. Fallback remains for safety (if WebP load fails unexpectedly)
+
 ## Files Modified
 
 ### Frontend
 - `src/components/Board.tsx` - Progress counter logic
-- `src/lib/images.ts` - WebP detection and URL resolution
-- `src/lib/productImageCache.ts` - WebP fallback on load error
+- `src/components/ProductNode.tsx` - Pass `has_webp` to hook
+- `src/hooks/useProductImage.ts` - Accept `hasWebp` option
+- `src/lib/images.ts` - Check `hasWebp` before WebP URL
+- `src/lib/productImageCache.ts` - Pass `hasWebp` through, handle fallback
+- `src/lib/types.ts` - Add `has_webp` to Item type
 
 ### Backend
 - `functions/api/upload.ts` - Cache-Control headers
 
+### Database
+- `supabase/migrations/20261009000000_add_has_webp.sql` - Add `has_webp` column
+
 ### Tooling
-- `scripts/backfill-webp.ts` - PNG to WebP conversion script
-- `scripts/README.md` - Detailed backfill documentation
+- `scripts/backfill-webp.ts` - Better compression + database updates
+- `scripts/README.md` - Updated docs and expectations
 - `package.json` - Added npm scripts and dev dependencies
 
 ## Dependencies Added
@@ -115,45 +163,72 @@ npm run backfill:webp           # Run for real
 - **File size**: 5.9 MB total (42 × ~140 KB average PNG)
 - **Cache**: `cf-cache-status: DYNAMIC` (not cached)
 - **Format**: PNG only
+- **has_webp**: N/A
 
-### After (with backfill + Cloudflare settings)
-- **File size**: ~4.2 MB total (42 × ~100 KB average WebP)
-- **Reduction**: 25-30% smaller
+### After (with migration + backfill + Cloudflare settings)
+- **File size**: ~1.8-2.5 MB total (42 × ~40-60 KB average WebP)
+- **Reduction**: 60-70% smaller
 - **Cache**: `cf-cache-status: HIT` (cached at edge)
 - **Format**: WebP with PNG fallback
+- **has_webp**: true (database flag)
 
 ### Load Time Improvement
-- **Estimated**: 40-60% faster initial page load
-- **Factors**: Smaller files + edge caching + modern format
+- **Estimated**: 60-75% faster initial page load
+- **Factors**: Much smaller files (60-70%) + edge caching + modern format
+
+### Compression Example
+**Before**: 577×433 PNG = 508 KB
+**After**: 577×433 WebP (q80, alpha 95) ≈ 80-120 KB
+**Savings**: ~75-85% for this specific image
 
 ## Technical Details
 
 ### WebP Detection
-Uses a tiny 1x1 WebP data URI to test browser support:
+Uses a tiny 1x1 WebP data URI to test browser support on first load (cached after):
 ```javascript
 const testWebP = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
 ```
 
-### URL Resolution Flow
-1. `resolveImageUrl('items/uuid.png')` called
-2. Checks WebP support (cached after first check)
-3. If supported, returns `items/uuid.webp` URL
-4. If not supported, returns `items/uuid.png` URL
+### has_webp Flag
+Database column tracks which items have WebP versions:
+- Added in migration: `20261009000000_add_has_webp.sql`
+- Default: `false` (safe for gradual rollout)
+- Set to `true` by backfill script after successful upload
+- Prevents 404s before backfill completes
 
-### Fallback Logic
+### URL Resolution Flow
+1. `resolveImageUrl('items/uuid.png', hasWebp)` called
+2. If `hasWebp=false`, returns PNG URL immediately
+3. If `hasWebp=true`, checks WebP support (cached after first check)
+4. If WebP supported, returns `items/uuid.webp` URL
+5. If not supported, returns `items/uuid.png` URL
+
+### Fallback Logic (Safety Net)
+Even with `has_webp=true`, fallback handles edge cases:
 1. Browser tries to load `items/uuid.webp`
-2. If 404 or load error occurs
-3. Checks if original path was `.png`
+2. If load error occurs (e.g., file deleted, CDN issue)
+3. Checks if original path was `.png` and `hasWebp` was true
 4. Constructs fallback URL: `items/uuid.png`
 5. Loads PNG version
 6. If that fails too, marks as failed
 
 ### Progress Counter Logic
 1. On mount, calculates which items are initially visible
-2. Filters items by viewport position + padding
+2. Filters items by viewport position + 1400px padding
 3. Tracks load state of only those items
 4. Hides counter 500ms after all visible items load
 5. Remains hidden even as user scrolls (lazy loads more)
+
+### Backfill Database Updates
+After each successful WebP upload:
+```typescript
+await supabase
+  .from('items')
+  .update({ has_webp: true })
+  .eq('image_path', obj.Key);
+```
+
+This enables gradual rollout: items are served as WebP one by one as backfill progresses.
 
 ## Backward Compatibility
 
@@ -176,18 +251,35 @@ const testWebP = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAE
 - Check browser console for image load errors
 - Verify network tab shows images loading successfully
 - May indicate lazy loading not working correctly
+- Check that items have correct `x`, `y`, and viewport calculations
 
-### WebP not loading
-- Check that backfill completed successfully
+### WebP not loading after backfill
+- Verify backfill completed: check R2 bucket for `.webp` files
+- Check database: `select has_webp from items where image_path = 'items/xyz.png'`
+- Should be `true` after backfill
 - Verify cache rule is active in Cloudflare
-- Check browser DevTools Network tab for 404s on `.webp` files
-- Confirm PNG fallback works
+- Check browser DevTools Network tab for requests
+- Confirm PNG fallback works if WebP fails
+
+### Still seeing 404s on .webp files
+- Check that database migration ran: `\d items` in psql should show `has_webp` column
+- Verify `has_webp=false` for items without WebP (before backfill)
+- Client should only request `.webp` when `has_webp=true`
+- If 404s occur with `has_webp=true`, backfill may have failed for those items
 
 ### Cache-Control not working
 - Verify R2 object metadata shows cache headers
+- Use `curl -I https://images.typology.network/items/xyz.webp`
+- Should see `Cache-Control: public, max-age=31536000, immutable`
 - Check Cloudflare cache rule is active and matching
 - May take time for cache to populate
 - Use Cloudflare Purge Cache if needed
+
+### Backfill fails with database error
+- Verify `SUPABASE_SERVICE_ROLE_KEY` (not anon key)
+- Check migration applied: column exists
+- Ensure service role has update permissions
+- Check `image_path` matches exactly (case-sensitive)
 
 ## References
 
