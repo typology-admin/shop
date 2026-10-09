@@ -43,9 +43,30 @@ export function loadSharedProductImage(imagePath: string, revision = 0): Promise
         notify(current);
       };
       element.onerror = () => {
-        current.image = null;
-        current.status = 'failed';
-        notify(current);
+        // If WebP failed, try PNG fallback
+        if (url.endsWith('.webp') && imagePath.endsWith('.png')) {
+          const pngUrl = url.replace(/\.webp$/i, '.png');
+          const fallbackElement = new window.Image();
+          if (pngUrl.startsWith('http://') || pngUrl.startsWith('https://')) {
+            fallbackElement.crossOrigin = 'anonymous';
+          }
+          fallbackElement.decoding = 'async';
+          fallbackElement.onload = () => {
+            current.image = fallbackElement;
+            current.status = 'loaded';
+            notify(current);
+          };
+          fallbackElement.onerror = () => {
+            current.image = null;
+            current.status = 'failed';
+            notify(current);
+          };
+          fallbackElement.src = pngUrl;
+        } else {
+          current.image = null;
+          current.status = 'failed';
+          notify(current);
+        }
       };
       element.src = url;
     });

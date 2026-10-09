@@ -95,12 +95,41 @@ export function Board({
     };
   }, [copies, fit.canvasHeight, fit.scale]);
 
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
   const handleLoaded = useCallback((id: string, ok: boolean) => {
     setLoaded((prev) => (prev[id] === ok ? prev : { ...prev, [id]: ok }));
   }, []);
 
   const loadedCount = items.filter((item) => loaded[item.id]).length;
-  const showProgress = items.length > 0 && loadedCount < items.length;
+  
+  // Hide progress once initial visible items are loaded (after a brief delay to ensure stability)
+  useEffect(() => {
+    if (initialLoadComplete || items.length === 0) return;
+    
+    // Count items that should be loading (near viewport in the first active copy)
+    const firstCopy = activeCopies[0] ?? 0;
+    const initialItems = items.filter((item) => {
+      const worldY = item.y + firstCopy * fit.canvasHeight;
+      const extent = Math.max(item.image_width, item.image_height) * item.scale * 0.6;
+      const padPx = 1400;
+      const top = window.scrollY - padPx;
+      const bottom = window.scrollY + window.innerHeight + padPx;
+      const y0 = (worldY - extent) * fit.scale;
+      const y1 = (worldY + extent) * fit.scale;
+      return y1 >= top && y0 <= bottom;
+    });
+    
+    const initialLoadedCount = initialItems.filter((item) => loaded[item.id]).length;
+    
+    if (initialItems.length > 0 && initialLoadedCount >= initialItems.length) {
+      // All initially visible items are loaded
+      const timer = setTimeout(() => setInitialLoadComplete(true), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [items, loaded, activeCopies, fit.canvasHeight, fit.scale, initialLoadComplete]);
+  
+  const showProgress = items.length > 0 && loadedCount < items.length && !initialLoadComplete;
   const showWells = mode === 'admin' && wells.length > 0;
   const canAddAtWell = Boolean(onAddAtWell);
 
@@ -211,7 +240,7 @@ export function Board({
       </Stage>
       {showProgress ? (
         <div className="image-progress" aria-live="polite">
-          {loadedCount} / {items.length} placed
+          Loading images…
         </div>
       ) : null}
     </div>
