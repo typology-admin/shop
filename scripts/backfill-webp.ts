@@ -7,20 +7,20 @@
  * This script:
  * 1. Lists all .png objects in the R2 bucket via S3 API
  * 2. For each PNG without a .webp counterpart, downloads it
- * 3. Converts PNG to WebP using sharp (preserving transparency)
+ * 3. Converts PNG to WebP with optimized settings (quality 80, alphaQuality 95, effort 6)
  * 4. Uploads the WebP with proper cache headers
+ * 5. Updates the database to set has_webp=true
  * 
  * Requires environment variables:
  *   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
  *   R2_BUCKET_NAME (defaults to 'knoll-items')
  *   VITE_R2_PUBLIC_BASE_URL (for downloading images)
- * 
- * Install sharp:
- *   npm install --save-dev sharp
+ *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (for updating has_webp flag)
  */
 
 import { AwsClient } from 'aws4fetch';
 import sharp from 'sharp';
+import { createClient } from '@supabase/supabase-js';
 
 const isDryRun = process.argv.includes('--dry-run');
 
@@ -53,6 +53,8 @@ async function main() {
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
   const bucketName = process.env.R2_BUCKET_NAME || 'knoll-items';
   const publicBaseUrl = process.env.VITE_R2_PUBLIC_BASE_URL;
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
   if (!accountId || !accessKeyId || !secretAccessKey) {
     console.error('Error: Missing required R2 credentials');
@@ -65,6 +67,17 @@ async function main() {
     console.error('This should be your R2 public URL (e.g., https://images.typology.network)');
     process.exit(1);
   }
+  
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+    console.error('These are needed to update the has_webp flag in the database');
+    process.exit(1);
+  }
+  
+  // Initialize Supabase client with service role key
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false },
+  });
   
   console.log(`Bucket: ${bucketName}`);
   console.log(`Public URL: ${publicBaseUrl}`);
@@ -126,9 +139,12 @@ async function main() {
       
       const pngBuffer = Buffer.from(await pngResponse.arrayBuffer());
       
-      // Convert to WebP using sharp (preserves alpha channel)
+      // Convert to WebP with optimized settings for cut-outs
+      // quality: 80 for main image (good for product photos)
+      // alphaQuality: 95 keeps transparency edges clean
+      // effort: 6 for better compression (0=fast, 6=best)
       const webpBuffer = await sharp(pngBuffer)
-        .webp({ quality: 90, alphaQuality: 100, lossless: false })
+        .webp({ quality: 80, alphaQuality: 95, effort: 6, lossless: false })
         .toBuffer();
       
       const originalKB = (obj.Size / 1024).toFixed(1);
@@ -153,8 +169,22 @@ async function main() {
         }
         
         console.log(`   ✅ Uploaded ${webpKey}`);
+        
+        // Update database: set has_webp=true for this item
+        // Extract the path from the key (e.g., "items/uuid.png" -> "items/uuid.png")
+        const { error: dbError } = await supabase
+          .from('items')
+          .update({ has_webp: true })
+          .eq('image_path', obj.Key);
+        
+        if (dbError) {
+          console.warn(`   ⚠️  Database update failed: ${dbError.message}`);
+        } else {
+          console.log(`   ✅ Updated database: has_webp=true`);
+        }
       } else {
         console.log(`   [DRY RUN] Would upload ${webpKey}`);
+        console.log(`   [DRY RUN] Would set has_webp=true for ${obj.Key}`);
       }
       
       converted++;

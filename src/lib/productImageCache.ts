@@ -18,13 +18,17 @@ function notify(entry: Entry) {
 }
 
 /** Shared loader so looped board copies decode each product photo once. */
-export function loadSharedProductImage(imagePath: string, revision = 0): Promise<HTMLImageElement> {
+export function loadSharedProductImage(
+  imagePath: string,
+  revision = 0,
+  hasWebp = false,
+): Promise<HTMLImageElement> {
   const key = keyFor(imagePath, revision);
   let entry = cache.get(key);
   if (!entry) {
     entry = { image: null, status: 'loading', waiters: [] };
     cache.set(key, entry);
-    void resolveImageUrl(imagePath).then((url) => {
+    void resolveImageUrl(imagePath, hasWebp).then((url) => {
       const current = cache.get(key);
       if (!current) return;
       if (!url) {
@@ -43,8 +47,8 @@ export function loadSharedProductImage(imagePath: string, revision = 0): Promise
         notify(current);
       };
       element.onerror = () => {
-        // If WebP failed, try PNG fallback
-        if (url.endsWith('.webp') && imagePath.endsWith('.png')) {
+        // If WebP failed and we expected it to exist, try PNG fallback
+        if (url.endsWith('.webp') && imagePath.endsWith('.png') && hasWebp) {
           const pngUrl = url.replace(/\.webp$/i, '.png');
           const fallbackElement = new window.Image();
           if (pngUrl.startsWith('http://') || pngUrl.startsWith('https://')) {

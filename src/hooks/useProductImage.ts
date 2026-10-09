@@ -8,9 +8,10 @@ import {
 export function useProductImage(
   imagePath: string,
   revision = 0,
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; hasWebp?: boolean } = {},
 ) {
   const enabled = options.enabled !== false;
+  const hasWebp = options.hasWebp ?? false;
   const peeked = enabled ? peekSharedProductImage(imagePath, revision) : null;
   const [image, setImage] = useState<HTMLImageElement | null>(peeked);
   const [status, setStatus] = useState<'idle' | 'loading' | 'loaded' | 'failed'>(
@@ -35,7 +36,7 @@ export function useProductImage(
     setImage(null);
     setStatus('loading');
 
-    void loadSharedProductImage(imagePath, revision)
+    void loadSharedProductImage(imagePath, revision, hasWebp)
       .then((next) => {
         if (cancelled) return;
         setImage(next);
@@ -50,7 +51,7 @@ export function useProductImage(
     return () => {
       cancelled = true;
     };
-  }, [imagePath, revision, enabled]);
+  }, [imagePath, revision, enabled, hasWebp]);
 
   return { image, status, forget: () => forgetSharedProductImage(imagePath, revision) };
 }

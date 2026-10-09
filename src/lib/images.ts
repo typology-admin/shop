@@ -51,7 +51,10 @@ export function forgetImageUrl(imagePath: string): void {
   void import('./itemMask.ts').then((mod) => mod.forgetFootprint(imagePath));
 }
 
-export async function resolveImageUrl(imagePath: string): Promise<string | null> {
+export async function resolveImageUrl(
+  imagePath: string,
+  hasWebp?: boolean,
+): Promise<string | null> {
   if (imagePath.startsWith('local:')) {
     const cached = blobUrlCache.get(imagePath);
     if (cached) return cached;
@@ -62,8 +65,8 @@ export async function resolveImageUrl(imagePath: string): Promise<string | null>
     return url;
   }
   
-  // For PNG files, try WebP version if browser supports it
-  if (imagePath.endsWith('.png') && await supportsWebP()) {
+  // For PNG files, try WebP version if browser supports it AND has_webp is true
+  if (imagePath.endsWith('.png') && hasWebp && await supportsWebP()) {
     const webpPath = imagePath.replace(/\.png$/i, '.webp');
     return publicImageUrl(webpPath);
   }

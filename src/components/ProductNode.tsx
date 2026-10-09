@@ -43,6 +43,7 @@ export function ProductNode({
   const near = useNearViewport(worldY, extent, stageScale);
   const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0, {
     enabled: near,
+    hasWebp: item.has_webp ?? false,
   });
 
   useLayoutEffect(() => {
