@@ -19,9 +19,12 @@ export function useProductImage(
   );
 
   useEffect(() => {
+    // If disabled and not yet loaded, stay idle
     if (!enabled) {
-      setImage(null);
-      setStatus('idle');
+      // Don't clear already-loaded images! Just don't start new loads.
+      if (status === 'idle' || status === 'loading') {
+        setStatus('idle');
+      }
       return;
     }
 
@@ -32,8 +35,10 @@ export function useProductImage(
       return;
     }
 
+    // Only start loading if not already loaded
+    if (status === 'loaded') return;
+
     let cancelled = false;
-    setImage(null);
     setStatus('loading');
 
     void loadSharedProductImage(imagePath, revision, hasWebp)
@@ -51,7 +56,7 @@ export function useProductImage(
     return () => {
       cancelled = true;
     };
-  }, [imagePath, revision, enabled, hasWebp]);
+  }, [imagePath, revision, enabled, hasWebp, status]);
 
   return { image, status, forget: () => forgetSharedProductImage(imagePath, revision) };
 }

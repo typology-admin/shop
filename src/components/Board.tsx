@@ -122,9 +122,15 @@ export function Board({
     
     const initialLoadedCount = initialItems.filter((item) => loaded[item.id]).length;
     
-    if (initialItems.length > 0 && initialLoadedCount >= initialItems.length) {
-      // All initially visible items are loaded
-      const timer = setTimeout(() => setInitialLoadComplete(true), 500);
+    // Wait for either:
+    // 1. All initially visible items loaded, OR
+    // 2. At least 80% loaded and 2 seconds have passed
+    const loadRatio = initialItems.length > 0 ? initialLoadedCount / initialItems.length : 0;
+    const enoughLoaded = loadRatio >= 0.8;
+    
+    if (initialItems.length > 0 && (initialLoadedCount >= initialItems.length || enoughLoaded)) {
+      // All (or most) initially visible items are loaded - wait a bit longer to be sure
+      const timer = setTimeout(() => setInitialLoadComplete(true), 1000);
       return () => clearTimeout(timer);
     }
   }, [items, loaded, activeCopies, fit.canvasHeight, fit.scale, initialLoadComplete]);
