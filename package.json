@@ -9,7 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "preview:pages": "npm run build && npx wrangler pages dev dist",
-    "deploy": "npm run build && npx wrangler pages deploy dist"
+    "deploy": "npm run build && npx wrangler pages deploy dist",
+    "backfill:webp": "tsx scripts/backfill-webp.ts",
+    "backfill:webp:dry-run": "tsx scripts/backfill-webp.ts --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
@@ -26,6 +28,8 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
     "oxlint": "^1.79.0",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vite": "^8.2.2"
   }

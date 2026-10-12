@@ -3,6 +3,27 @@ import { localGetBlob } from './localStore.ts';
 
 const blobUrlCache = new Map<string, string>();
 
+// Cache WebP support detection result
+let webpSupported: boolean | null = null;
+
+async function supportsWebP(): Promise<boolean> {
+  if (webpSupported !== null) return webpSupported;
+  
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      webpSupported = img.width === 1;
+      resolve(webpSupported);
+    };
+    img.onerror = () => {
+      webpSupported = false;
+      resolve(false);
+    };
+    // Tiny 1x1 WebP test image
+    img.src = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
+  });
+}
+
 export function publicImageUrl(imagePath: string): string {
   if (
     imagePath.startsWith('data:') ||
@@ -30,7 +51,10 @@ export function forgetImageUrl(imagePath: string): void {
   void import('./itemMask.ts').then((mod) => mod.forgetFootprint(imagePath));
 }
 
-export async function resolveImageUrl(imagePath: string): Promise<string | null> {
+export async function resolveImageUrl(
+  imagePath: string,
+  hasWebp?: boolean,
+): Promise<string | null> {
   if (imagePath.startsWith('local:')) {
     const cached = blobUrlCache.get(imagePath);
     if (cached) return cached;
@@ -40,6 +64,13 @@ export async function resolveImageUrl(imagePath: string): Promise<string | null>
     blobUrlCache.set(imagePath, url);
     return url;
   }
+  
+  // For PNG files, try WebP version if browser supports it AND has_webp is true
+  if (imagePath.endsWith('.png') && hasWebp && await supportsWebP()) {
+    const webpPath = imagePath.replace(/\.png$/i, '.webp');
+    return publicImageUrl(webpPath);
+  }
+  
   return publicImageUrl(imagePath);
 }
 

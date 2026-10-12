@@ -16,6 +16,8 @@ export type Item = {
   section_id: string | null;
   created_at: string;
   image_rev?: number;
+  /** True when a .webp version exists in R2. */
+  has_webp?: boolean;
 };
 
 export type ItemInsert = Omit<Item, 'id' | 'created_at'> & {

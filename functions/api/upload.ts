@@ -79,8 +79,13 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     }
 
     const key = objectKey(admin ? 'items' : `users/${user.id}`);
+    
+    // Upload PNG with immutable cache control (filenames are unique UUIDs)
     await context.env.IMAGES.put(key, buffer, {
-      httpMetadata: { contentType: 'image/png' },
+      httpMetadata: { 
+        contentType: 'image/png',
+        cacheControl: 'public, max-age=31536000, immutable',
+      },
     });
 
     return json({ path: key, width: info.width, height: info.height });
