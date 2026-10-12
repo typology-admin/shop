@@ -28,7 +28,7 @@ export async function fetchItems(): Promise<Item[]> {
   const { data, error } = await supabase
     .from('items')
     .select(
-      'id, title, affiliate_url, store, image_path, image_width, image_height, x, y, scale, rotation, z_index, tags, section_id, created_at',
+      'id, title, affiliate_url, store, image_path, image_width, image_height, x, y, scale, rotation, z_index, tags, section_id, created_at, has_webp',
     )
     .order('z_index', { ascending: true });
   if (error) throw error;

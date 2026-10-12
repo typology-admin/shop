@@ -56,7 +56,10 @@ export function ProductNode({
     const node = nodeRef.current;
     if (!node || !image) return;
     // Hit region follows visible PNG pixels so transparent padding is not clickable.
-    node.cache({ pixelRatio: Math.min(1, 1 / Math.max(0.35, stageScale)) });
+    // Cache at a reasonable resolution - don't need full res for hit detection
+    // Use lower pixelRatio to reduce memory and improve performance
+    const ratio = Math.min(0.5, 1 / Math.max(0.5, stageScale));
+    node.cache({ pixelRatio: ratio });
     node.drawHitFromCache(HIT_ALPHA_THRESHOLD);
     node.getLayer()?.batchDraw();
   }, [image, stageScale]);
