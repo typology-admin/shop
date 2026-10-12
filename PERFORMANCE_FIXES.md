@@ -132,7 +132,7 @@ Reduces cache resolution by 50% while maintaining good hit detection.
 ### After Fixes
 
 - ✅ **Format**: WebP for 38/42 items (has_webp=true)
-- ✅ **Size**: ~2.0 MB total (50 KB WebP average + 4 PNG)
+- ✅ **Size**: **0.63 MB total** (38 WebP + 4 PNG, measured in production)
 - ✅ **Requests**: Each image loaded once, cached forever
 - ✅ **Memory**: Images stay loaded, shared across loop copies
 - ✅ **Konva**: Lower-res cache, still perfect hit detection
@@ -141,7 +141,7 @@ Reduces cache resolution by 50% while maintaining good hit detection.
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
-| Data transfer | 5.9 MB | ~2.0 MB | **66% reduction** |
+| Data transfer | 5.9 MB | **0.63 MB** | **89% reduction** |
 | Unique requests | ~38-42 | ~38-42 | Same (good) |
 | Duplicate requests | Many (on scroll) | 0 | **Eliminates reloads** |
 | Memory per image | Cleared on scroll | Persistent | **Smooth scrolling** |
