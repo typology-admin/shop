@@ -6,22 +6,28 @@ const blobUrlCache = new Map<string, string>();
 // Cache WebP support detection result
 let webpSupported: boolean | null = null;
 
+let webpProbe: Promise<boolean> | null = null;
+
 async function supportsWebP(): Promise<boolean> {
   if (webpSupported !== null) return webpSupported;
-  
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      webpSupported = img.width === 1;
-      resolve(webpSupported);
-    };
-    img.onerror = () => {
-      webpSupported = false;
-      resolve(false);
-    };
-    // Tiny 1x1 WebP test image
-    img.src = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
-  });
+  if (!webpProbe) {
+    webpProbe = new Promise((resolve) => {
+      const img = new Image();
+      const done = (ok: boolean) => {
+        webpSupported = ok;
+        resolve(ok);
+      };
+      img.onload = () => done(img.width === 1);
+      img.onerror = () => done(false);
+      // Tiny 1x1 WebP test image
+      img.src = 'data:image/webp;base64,UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=';
+      // Never block the whole board if the probe stalls.
+      window.setTimeout(() => {
+        if (webpSupported === null) done(true);
+      }, 250);
+    });
+  }
+  return webpProbe;
 }
 
 export function publicImageUrl(imagePath: string): string {

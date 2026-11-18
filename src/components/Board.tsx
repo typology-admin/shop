@@ -205,7 +205,17 @@ export function Board({
 
   useEffect(() => {
     let frame = 0;
-    function refresh() {
+    function applyNearSets(nextLoad: Set<string>, nextRender: Set<string>, defer: boolean) {
+      const update = () => {
+        setLoadNear((prev) => (sameKeys(prev, nextLoad) ? prev : nextLoad));
+        setRenderNear((prev) => (sameKeys(prev, nextRender) ? prev : nextRender));
+      };
+      // First paint must not use startTransition — deferred updates can leave the
+      // board blank for many seconds (no image requests until a later interaction).
+      if (defer) startTransition(update);
+      else update();
+    }
+    function refresh(fromScroll = false) {
       frame = 0;
       const nextCopies = visibleCopyIndexes(copies, fit.canvasHeight, fit.scale);
       // During first paint, only mount one loop copy so React/Konva don't thrash.
@@ -229,17 +239,13 @@ export function Board({
         fit.scale,
         RENDER_PAD_PX,
       );
-      // Non-urgent: don't block wheel/scroll on near-set React updates.
-      startTransition(() => {
-        setLoadNear((prev) => (sameKeys(prev, nextLoad) ? prev : nextLoad));
-        setRenderNear((prev) => (sameKeys(prev, nextRender) ? prev : nextRender));
-      });
+      applyNearSets(nextLoad, nextRender, fromScroll && initialLoadComplete);
     }
     function onScroll() {
       if (frame) return;
-      frame = window.requestAnimationFrame(refresh);
+      frame = window.requestAnimationFrame(() => refresh(true));
     }
-    refresh();
+    refresh(false);
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll);
     return () => {
