@@ -4,7 +4,6 @@ import { Image as KonvaImage, Transformer } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { Image as KonvaImageNode } from 'konva/lib/shapes/Image';
 import type { Transformer as KonvaTransformerNode } from 'konva/lib/shapes/Transformer';
-import { useNearViewport } from '../hooks/useNearViewport.ts';
 import { useProductImage } from '../hooks/useProductImage.ts';
 import { clampScale } from '../lib/canvas.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
@@ -13,8 +12,10 @@ type Props = {
   item: Item;
   mode: 'public' | 'admin';
   selected: boolean;
-  /** Absolute canvas Y including loop-copy offset (for viewport culling). */
-  worldY: number;
+  /** Prefetch / decode when true (shared image cache). */
+  loadNear: boolean;
+  /** Mount Konva node when true — false unmounts off-screen nodes. */
+  renderNear: boolean;
   stageScale: number;
   onSelect: (id: string) => void;
   onCommit: (id: string, patch: ItemPatch) => void;
@@ -24,11 +25,25 @@ type Props = {
   onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
+function scheduleIdle(work: () => void): () => void {
+  const w = window as Window & {
+    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    cancelIdleCallback?: (id: number) => void;
+  };
+  if (typeof w.requestIdleCallback === 'function') {
+    const id = w.requestIdleCallback(() => work(), { timeout: 1200 });
+    return () => w.cancelIdleCallback?.(id);
+  }
+  const id = window.setTimeout(work, 48);
+  return () => window.clearTimeout(id);
+}
+
 export function ProductNode({
   item,
   mode,
   selected,
-  worldY,
+  loadNear,
+  renderNear,
   stageScale,
   onSelect,
   onCommit,
@@ -39,10 +54,8 @@ export function ProductNode({
 }: Props) {
   const nodeRef = useRef<KonvaImageNode>(null);
   const transformerRef = useRef<KonvaTransformerNode>(null);
-  const extent = Math.max(item.image_width, item.image_height) * item.scale * 0.6;
-  const near = useNearViewport(worldY, extent, stageScale);
   const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0, {
-    enabled: near,
+    enabled: loadNear,
     hasWebp: item.has_webp ?? false,
   });
 
@@ -53,16 +66,21 @@ export function ProductNode({
   }, [item.id, onLoaded, status]);
 
   useLayoutEffect(() => {
+    if (!renderNear || !image) return;
     const node = nodeRef.current;
-    if (!node || !image) return;
-    // Hit region follows visible PNG pixels so transparent padding is not clickable.
-    // Cache at a reasonable resolution - don't need full res for hit detection
-    // Use lower pixelRatio to reduce memory and improve performance
-    const ratio = Math.min(0.5, 1 / Math.max(0.5, stageScale));
-    node.cache({ pixelRatio: ratio });
-    node.drawHitFromCache(HIT_ALPHA_THRESHOLD);
-    node.getLayer()?.batchDraw();
-  }, [image, stageScale]);
+    if (!node) return;
+
+    // Hit masks are expensive (canvas readback). Defer so scroll/wheel stay responsive.
+    // Low pixelRatio is enough for click-through on transparent padding.
+    const ratio = Math.min(0.25, 1 / Math.max(0.75, stageScale));
+    const cancel = scheduleIdle(() => {
+      if (!nodeRef.current) return;
+      nodeRef.current.cache({ pixelRatio: ratio });
+      nodeRef.current.drawHitFromCache(HIT_ALPHA_THRESHOLD);
+      nodeRef.current.getLayer()?.batchDraw();
+    });
+    return cancel;
+  }, [image, stageScale, renderNear]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;
@@ -74,8 +92,10 @@ export function ProductNode({
     } else {
       transformer.nodes([]);
     }
-  }, [selected, image, item.z_index]);
+  }, [selected, image, item.z_index, renderNear]);
 
+  // Unmount off-screen nodes — decoded bitmaps stay in the shared image cache.
+  if (!renderNear) return null;
   if (status !== 'loaded' || !image) return null;
 
   const admin = mode === 'admin';

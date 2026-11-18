@@ -2,6 +2,7 @@ import { Circle, Group, Line, Stage, Layer, Rect } from 'react-konva';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DEFAULT_BOARD_COLOR, PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
+import { bandOverlaps, readViewportBand } from '../hooks/useViewportBand.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 import type { GravityWell } from '../lib/wells.ts';
 import { ProductNode } from './ProductNode.tsx';
@@ -26,6 +27,11 @@ type Props = {
   onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
+/** Prefetch images a bit ahead of mount so scroll-in is warm. */
+const LOAD_PAD_PX = 1600;
+/** Only mount Konva nodes near the viewport — keeps draw/hit cost bounded. */
+const RENDER_PAD_PX = 480;
+
 function visibleCopyIndexes(
   copies: number,
   canvasHeight: number,
@@ -43,6 +49,37 @@ function visibleCopyIndexes(
   }
   if (set.size === 0) set.add(Math.min(copies - 1, Math.max(0, center)));
   return [...set].sort((a, b) => a - b);
+}
+
+function nodeKey(copy: number, id: string) {
+  return `${copy}:${id}`;
+}
+
+function computeNearKeys(
+  items: Item[],
+  copies: number[],
+  canvasHeight: number,
+  scale: number,
+  padPx: number,
+): Set<string> {
+  const band = readViewportBand(padPx);
+  const keys = new Set<string>();
+  for (const copy of copies) {
+    for (const item of items) {
+      const worldY = item.y + copy * canvasHeight;
+      const extent = Math.max(item.image_width, item.image_height) * item.scale * 0.6;
+      if (bandOverlaps(band, worldY, extent, scale)) {
+        keys.add(nodeKey(copy, item.id));
+      }
+    }
+  }
+  return keys;
+}
+
+function sameKeys(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const key of a) if (!b.has(key)) return false;
+  return true;
 }
 
 export function Board({
@@ -69,6 +106,9 @@ export function Board({
   const [activeCopies, setActiveCopies] = useState<number[]>(() =>
     Array.from({ length: Math.min(copies, 2) }, (_, i) => i),
   );
+  const [loadNear, setLoadNear] = useState<Set<string>>(() => new Set());
+  const [renderNear, setRenderNear] = useState<Set<string>>(() => new Set());
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.z_index - b.z_index),
@@ -79,7 +119,28 @@ export function Board({
     let frame = 0;
     function refresh() {
       frame = 0;
-      setActiveCopies(visibleCopyIndexes(copies, fit.canvasHeight, fit.scale));
+      const nextCopies = visibleCopyIndexes(copies, fit.canvasHeight, fit.scale);
+      setActiveCopies((prev) =>
+        prev.length === nextCopies.length && prev.every((v, i) => v === nextCopies[i])
+          ? prev
+          : nextCopies,
+      );
+      const nextLoad = computeNearKeys(
+        items,
+        nextCopies,
+        fit.canvasHeight,
+        fit.scale,
+        LOAD_PAD_PX,
+      );
+      const nextRender = computeNearKeys(
+        items,
+        nextCopies,
+        fit.canvasHeight,
+        fit.scale,
+        RENDER_PAD_PX,
+      );
+      setLoadNear((prev) => (sameKeys(prev, nextLoad) ? prev : nextLoad));
+      setRenderNear((prev) => (sameKeys(prev, nextRender) ? prev : nextRender));
     }
     function onScroll() {
       if (frame) return;
@@ -93,49 +154,38 @@ export function Board({
       window.removeEventListener('resize', onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [copies, fit.canvasHeight, fit.scale]);
-
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  }, [copies, fit.canvasHeight, fit.scale, items]);
 
   const handleLoaded = useCallback((id: string, ok: boolean) => {
     setLoaded((prev) => (prev[id] === ok ? prev : { ...prev, [id]: ok }));
   }, []);
 
   const loadedCount = items.filter((item) => loaded[item.id]).length;
-  
-  // Hide progress once initial visible items are loaded (after a brief delay to ensure stability)
+
+  // Progress tracks items currently in the load band (not the whole board).
   useEffect(() => {
     if (initialLoadComplete || items.length === 0) return;
-    
-    // Count items that should be loading (near viewport in the first active copy)
-    const firstCopy = activeCopies[0] ?? 0;
-    const initialItems = items.filter((item) => {
-      const worldY = item.y + firstCopy * fit.canvasHeight;
-      const extent = Math.max(item.image_width, item.image_height) * item.scale * 0.6;
-      const padPx = 1400;
-      const top = window.scrollY - padPx;
-      const bottom = window.scrollY + window.innerHeight + padPx;
-      const y0 = (worldY - extent) * fit.scale;
-      const y1 = (worldY + extent) * fit.scale;
-      return y1 >= top && y0 <= bottom;
-    });
-    
-    const initialLoadedCount = initialItems.filter((item) => loaded[item.id]).length;
-    
-    // Wait for either:
-    // 1. All initially visible items loaded, OR
-    // 2. At least 80% loaded and 2 seconds have passed
-    const loadRatio = initialItems.length > 0 ? initialLoadedCount / initialItems.length : 0;
-    const enoughLoaded = loadRatio >= 0.8;
-    
-    if (initialItems.length > 0 && (initialLoadedCount >= initialItems.length || enoughLoaded)) {
-      // All (or most) initially visible items are loaded - wait a bit longer to be sure
-      const timer = setTimeout(() => setInitialLoadComplete(true), 1000);
+
+    const pendingIds = new Set<string>();
+    for (const key of loadNear) {
+      const id = key.slice(key.indexOf(':') + 1);
+      if (id) pendingIds.add(id);
+    }
+    if (pendingIds.size === 0) return;
+
+    let ready = 0;
+    for (const id of pendingIds) {
+      if (loaded[id]) ready += 1;
+    }
+    const ratio = ready / pendingIds.size;
+    if (ready >= pendingIds.size || ratio >= 0.85) {
+      const timer = setTimeout(() => setInitialLoadComplete(true), 400);
       return () => clearTimeout(timer);
     }
-  }, [items, loaded, activeCopies, fit.canvasHeight, fit.scale, initialLoadComplete]);
-  
-  const showProgress = items.length > 0 && loadedCount < items.length && !initialLoadComplete;
+  }, [items, loaded, loadNear, initialLoadComplete]);
+
+  const showProgress =
+    items.length > 0 && !initialLoadComplete && loadedCount < items.length;
   const showWells = mode === 'admin' && wells.length > 0;
   const canAddAtWell = Boolean(onAddAtWell);
 
@@ -165,22 +215,26 @@ export function Board({
           />
           {activeCopies.map((copy) => (
             <Group key={copy} y={copy * fit.canvasHeight}>
-              {sorted.map((item) => (
-                <ProductNode
-                  key={`${copy}-${item.id}`}
-                  item={item}
-                  mode={mode}
-                  selected={selectedId === item.id}
-                  worldY={item.y + copy * fit.canvasHeight}
-                  stageScale={fit.scale}
-                  onSelect={(id) => onSelect?.(id)}
-                  onCommit={(id, patch) => onCommit?.(id, patch)}
-                  onLoaded={copy === activeCopies[0] ? handleLoaded : undefined}
-                  onDragStartItem={onDragStartItem}
-                  onDragMoveItem={onDragMoveItem}
-                  onDragEndItem={onDragEndItem}
-                />
-              ))}
+              {sorted.map((item) => {
+                const key = nodeKey(copy, item.id);
+                return (
+                  <ProductNode
+                    key={key}
+                    item={item}
+                    mode={mode}
+                    selected={selectedId === item.id}
+                    loadNear={loadNear.has(key)}
+                    renderNear={renderNear.has(key)}
+                    stageScale={fit.scale}
+                    onSelect={(id) => onSelect?.(id)}
+                    onCommit={(id, patch) => onCommit?.(id, patch)}
+                    onLoaded={copy === activeCopies[0] ? handleLoaded : undefined}
+                    onDragStartItem={onDragStartItem}
+                    onDragMoveItem={onDragMoveItem}
+                    onDragEndItem={onDragEndItem}
+                  />
+                );
+              })}
             </Group>
           ))}
           {showWells
