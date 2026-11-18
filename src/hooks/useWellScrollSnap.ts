@@ -10,9 +10,8 @@ type Options = {
   loopCopies?: number;
 };
 
-const ESCAPE_DELTA = 160;
-const NEAR_PX = 96;
-const SETTLE_MS = 120;
+const NEAR_PX = 140;
+const SETTLE_MS = 140;
 
 function chromeBlocksSnap(): boolean {
   const html = document.documentElement;
@@ -36,7 +35,6 @@ function buildSnapTops(wellYs: number[], zoom: number, loopCopies: number): numb
   const tops: number[] = [];
   for (let copy = 0; copy < loopCopies; copy += 1) {
     for (const top of base) {
-      // scrollTopForCanvasY already includes one loop offset; fold into each copy band.
       const relative = top - loop;
       tops.push(relative + copy * loop);
     }
@@ -58,14 +56,15 @@ function nearestIndex(tops: number[], y: number): number {
 }
 
 /**
- * Window scroll snaps to gravity wells. Small wheel/trackpad motion stays locked;
- * a stronger gesture releases to the next well.
+ * Snap window scroll to gravity wells after the user stops scrolling.
+ *
+ * Important: no non-passive `wheel` listener. A preventDefault wheel handler
+ * forces the browser to wait on the main thread before scrolling (Chrome
+ * "wheel input event was delayed" violations).
  */
 export function useWellScrollSnap(options: Options) {
   const { wellYs, zoom = getActiveViewZoom(), enabled = true, loopCopies = 1 } = options;
   const wellKey = wellYs.map((y) => Math.round(y)).join('|');
-  const intentRef = useRef(0);
-  const lockedRef = useRef(-1);
   const snappingRef = useRef(false);
   const settleTimer = useRef(0);
 
@@ -74,99 +73,49 @@ export function useWellScrollSnap(options: Options) {
 
     const tops = () => buildSnapTops(wellYs, zoom, loopCopies);
 
-    function lockToNearest() {
-      const list = tops();
-      if (!list.length) return;
-      lockedRef.current = nearestIndex(list, window.scrollY);
-      intentRef.current = 0;
-    }
-
     function snapTo(index: number) {
       const list = tops();
       if (!list.length) return;
       const clamped = Math.max(0, Math.min(list.length - 1, index));
       const target = list[clamped];
       if (target == null) return;
-      lockedRef.current = clamped;
-      intentRef.current = 0;
+      if (Math.abs(window.scrollY - target) < 2) return;
       snappingRef.current = true;
       window.scrollTo({ top: target, behavior: 'smooth' });
       window.clearTimeout(settleTimer.current);
       settleTimer.current = window.setTimeout(() => {
         snappingRef.current = false;
-        // Correct after smooth scroll + infinite wrap.
         const again = tops();
-        lockedRef.current = nearestIndex(again, window.scrollY);
+        void nearestIndex(again, window.scrollY);
       }, 420);
     }
 
-    lockToNearest();
-
-    function onWheel(event: WheelEvent) {
-      if (event.ctrlKey || chromeBlocksSnap()) return;
-      if (Math.abs(event.deltaY) < Math.abs(event.deltaX)) return;
+    function maybeSnap(forceNearest: boolean) {
+      if (snappingRef.current || chromeBlocksSnap()) return;
       const list = tops();
       if (!list.length) return;
-
-      if (lockedRef.current < 0) lockToNearest();
-      const locked = lockedRef.current;
-      const lockedTop = list[locked];
-      if (lockedTop == null) return;
-
-      const dist = Math.abs(window.scrollY - lockedTop);
-      // Free-scroll when far from a well (e.g. after rail jump mid-flight).
-      if (dist > NEAR_PX * 2 && !snappingRef.current) {
-        intentRef.current = 0;
-        return;
+      const idx = nearestIndex(list, window.scrollY);
+      const top = list[idx];
+      if (top == null) return;
+      const dist = Math.abs(window.scrollY - top);
+      if (forceNearest || dist <= NEAR_PX) {
+        snapTo(idx);
       }
-
-      intentRef.current += event.deltaY;
-      if (Math.abs(intentRef.current) < ESCAPE_DELTA) {
-        event.preventDefault();
-        if (dist > 2 && !snappingRef.current) {
-          // Soft hold: ease back toward the well while resisting escape.
-          window.scrollTo({ top: lockedTop, behavior: 'auto' });
-        }
-        return;
-      }
-
-      event.preventDefault();
-      const dir = intentRef.current > 0 ? 1 : -1;
-      intentRef.current = 0;
-      snapTo(locked + dir);
     }
 
     function onScroll() {
       if (snappingRef.current || chromeBlocksSnap()) return;
       window.clearTimeout(settleTimer.current);
-      settleTimer.current = window.setTimeout(() => {
-        if (snappingRef.current || chromeBlocksSnap()) return;
-        const list = tops();
-        if (!list.length) return;
-        const idx = nearestIndex(list, window.scrollY);
-        const top = list[idx];
-        if (top == null) return;
-        if (Math.abs(window.scrollY - top) <= NEAR_PX) {
-          snapTo(idx);
-        } else {
-          lockedRef.current = idx;
-          intentRef.current = 0;
-        }
-      }, SETTLE_MS);
+      settleTimer.current = window.setTimeout(() => maybeSnap(false), SETTLE_MS);
     }
 
     function onScrollEnd() {
-      if (chromeBlocksSnap()) return;
-      const list = tops();
-      if (!list.length) return;
-      snapTo(nearestIndex(list, window.scrollY));
+      maybeSnap(true);
     }
 
-    window.addEventListener('wheel', onWheel, { passive: false });
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('scrollend', onScrollEnd as EventListener);
     return () => {
-      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('scroll', onScroll);
       window.removeEventListener('scrollend', onScrollEnd as EventListener);
       window.clearTimeout(settleTimer.current);

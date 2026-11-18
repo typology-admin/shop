@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { Board } from '../components/Board.tsx';
@@ -24,27 +24,17 @@ export function PublicBoard() {
   const { settings } = useSiteSettings();
   const landed = useRef(false);
   const [params, setParams] = useSearchParams();
-  const [snapReady, setSnapReady] = useState(false);
   const selectedId = params.get('item');
   const selected = items.find((item) => item.id === selectedId) ?? null;
   const looping = status === 'ready' && items.length > 0;
   const wellYs = sections.map((section) => section.y);
 
-  // Non-passive wheel snap fights image decode/mount — enable after first paint settles.
-  useEffect(() => {
-    if (status !== 'ready' || wellYs.length === 0) {
-      setSnapReady(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setSnapReady(true), 1800);
-    return () => window.clearTimeout(timer);
-  }, [status, wellYs.length]);
-
   useInfiniteWindowScroll(looping, PUBLIC_BOARD_COPIES);
+  // Snap uses passive scroll/scrollend only — never a non-passive wheel listener.
   useWellScrollSnap({
     wellYs,
     zoom,
-    enabled: snapReady && status === 'ready' && wellYs.length > 0,
+    enabled: status === 'ready' && wellYs.length > 0,
     loopCopies: looping ? PUBLIC_BOARD_COPIES : 1,
   });
 
