@@ -6,18 +6,65 @@
  * Usage:
  *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/cleanup-dev-uploads.ts
  *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/cleanup-dev-uploads.ts --dry-run
+ *
+ * SUPABASE_SERVICE_ROLE_KEY may be either the legacy service_role JWT or a
+ * Supabase management PAT (`sbp_…`); PATs are resolved to the project JWT.
  */
 
 import { createClient } from '@supabase/supabase-js';
 
 const isDryRun = process.argv.includes('--dry-run');
 
+function projectRefFromUrl(url: string): string | null {
+  try {
+    const host = new URL(url).hostname;
+    const match = /^([a-z0-9]+)\.supabase\.co$/i.exec(host);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveServiceRoleKey(
+  supabaseUrl: string,
+  key: string,
+): Promise<string> {
+  if (!key.startsWith('sbp_')) return key;
+
+  const ref = projectRefFromUrl(supabaseUrl);
+  if (!ref) {
+    throw new Error('Could not derive project ref from SUPABASE_URL for PAT lookup');
+  }
+
+  const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/api-keys`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (!response.ok) {
+    throw new Error(`Management API key lookup failed (${response.status})`);
+  }
+  const keys = (await response.json()) as Array<{ name?: string; id?: string; api_key?: string }>;
+  const service = keys.find((k) => k.name === 'service_role' || k.id === 'service_role');
+  if (!service?.api_key) {
+    throw new Error('No service_role key returned for this project');
+  }
+  console.log('Resolved management PAT to project service_role JWT');
+  return service.api_key;
+}
+
 async function main() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseUrl || !rawKey) {
     console.error('Need SUPABASE_URL (or VITE_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY');
+    process.exit(1);
+  }
+
+  let supabaseKey: string;
+  try {
+    supabaseKey = await resolveServiceRoleKey(supabaseUrl, rawKey);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
     process.exit(1);
   }
 
