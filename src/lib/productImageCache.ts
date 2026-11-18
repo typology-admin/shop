@@ -41,11 +41,20 @@ export function loadSharedProductImage(
         element.crossOrigin = 'anonymous';
       }
       element.decoding = 'async';
-      element.onload = () => {
-        current.image = element;
-        current.status = 'loaded';
-        notify(current);
+      const finish = (img: HTMLImageElement) => {
+        // Decode off the critical path before React/Konva paint with the bitmap.
+        const ready = () => {
+          current.image = img;
+          current.status = 'loaded';
+          notify(current);
+        };
+        if (typeof img.decode === 'function') {
+          void img.decode().then(ready).catch(ready);
+        } else {
+          ready();
+        }
       };
+      element.onload = () => finish(element);
       element.onerror = () => {
         // If WebP failed and we expected it to exist, try PNG fallback
         if (url.endsWith('.webp') && imagePath.endsWith('.png') && hasWebp) {
@@ -55,11 +64,7 @@ export function loadSharedProductImage(
             fallbackElement.crossOrigin = 'anonymous';
           }
           fallbackElement.decoding = 'async';
-          fallbackElement.onload = () => {
-            current.image = fallbackElement;
-            current.status = 'loaded';
-            notify(current);
-          };
+          fallbackElement.onload = () => finish(fallbackElement);
           fallbackElement.onerror = () => {
             current.image = null;
             current.status = 'failed';

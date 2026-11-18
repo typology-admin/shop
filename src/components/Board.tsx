@@ -1,5 +1,5 @@
 import { Circle, Group, Line, Stage, Layer, Rect } from 'react-konva';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 import { DEFAULT_BOARD_COLOR, PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
@@ -34,9 +34,9 @@ type Props = {
 };
 
 /** Prefetch images a bit ahead of mount so scroll-in is warm. */
-const LOAD_PAD_PX = 1600;
-/** Only mount Konva nodes near the viewport — keeps draw/hit cost bounded. */
-const RENDER_PAD_PX = 480;
+const LOAD_PAD_PX = 1400;
+/** Only mount Konva nodes near the viewport — keeps draw cost bounded. */
+const RENDER_PAD_PX = 320;
 
 function visibleCopyIndexes(
   copies: number,
@@ -158,6 +158,7 @@ export function Board({
 
   const stageRef = useRef<Konva.Stage | null>(null);
   const hoverIdRef = useRef<string | null>(null);
+  const moveFrameRef = useRef(0);
 
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.z_index - b.z_index),
@@ -180,19 +181,22 @@ export function Board({
   const handlePublicPointer = useCallback(
     (kind: 'move' | 'click') => {
       if (mode !== 'public') return;
-      const hit = pickAtPointer();
-      const stage = stageRef.current;
-      if (kind === 'move' && stage) {
-        const next = hit?.id ?? null;
-        if (hoverIdRef.current !== next) {
-          hoverIdRef.current = next;
-          stage.container().style.cursor = next ? 'pointer' : 'default';
-        }
+      if (kind === 'move') {
+        if (moveFrameRef.current) return;
+        moveFrameRef.current = window.requestAnimationFrame(() => {
+          moveFrameRef.current = 0;
+          const hit = pickAtPointer();
+          const stage = stageRef.current;
+          if (!stage) return;
+          const next = hit?.id ?? null;
+          if (hoverIdRef.current !== next) {
+            hoverIdRef.current = next;
+            stage.container().style.cursor = next ? 'pointer' : 'default';
+          }
+        });
         return;
       }
-      if (kind === 'click') {
-        onSelect?.(hit?.id ?? null);
-      }
+      onSelect?.(pickAtPointer()?.id ?? null);
     },
     [mode, pickAtPointer, onSelect],
   );
@@ -202,27 +206,32 @@ export function Board({
     function refresh() {
       frame = 0;
       const nextCopies = visibleCopyIndexes(copies, fit.canvasHeight, fit.scale);
+      // During first paint, only mount one loop copy so React/Konva don't thrash.
+      const copiesForMount = initialLoadComplete ? nextCopies : nextCopies.slice(0, 1);
       setActiveCopies((prev) =>
-        prev.length === nextCopies.length && prev.every((v, i) => v === nextCopies[i])
+        prev.length === copiesForMount.length && prev.every((v, i) => v === copiesForMount[i])
           ? prev
-          : nextCopies,
+          : copiesForMount,
       );
       const nextLoad = computeNearKeys(
         items,
-        nextCopies,
+        copiesForMount,
         fit.canvasHeight,
         fit.scale,
         LOAD_PAD_PX,
       );
       const nextRender = computeNearKeys(
         items,
-        nextCopies,
+        copiesForMount,
         fit.canvasHeight,
         fit.scale,
         RENDER_PAD_PX,
       );
-      setLoadNear((prev) => (sameKeys(prev, nextLoad) ? prev : nextLoad));
-      setRenderNear((prev) => (sameKeys(prev, nextRender) ? prev : nextRender));
+      // Non-urgent: don't block wheel/scroll on near-set React updates.
+      startTransition(() => {
+        setLoadNear((prev) => (sameKeys(prev, nextLoad) ? prev : nextLoad));
+        setRenderNear((prev) => (sameKeys(prev, nextRender) ? prev : nextRender));
+      });
     }
     function onScroll() {
       if (frame) return;
@@ -236,7 +245,7 @@ export function Board({
       window.removeEventListener('resize', onScroll);
       if (frame) window.cancelAnimationFrame(frame);
     };
-  }, [copies, fit.canvasHeight, fit.scale, items]);
+  }, [copies, fit.canvasHeight, fit.scale, items, initialLoadComplete]);
 
   const handleLoaded = useCallback((id: string, ok: boolean) => {
     setLoaded((prev) => (prev[id] === ok ? prev : { ...prev, [id]: ok }));
@@ -302,7 +311,7 @@ export function Board({
           if (event.target === event.target.getStage()) onSelect?.(null);
         }}
       >
-        <Layer>
+        <Layer listening={mode === 'admin'}>
           <Rect
             x={0}
             y={0}
