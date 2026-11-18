@@ -19,12 +19,10 @@ export function useProductImage(
   );
 
   useEffect(() => {
-    // If disabled and not yet loaded, stay idle
+    // Keep already-decoded images in memory when off-screen (lazy gate only
+    // controls whether we *start* a load — clearing would re-fetch on scroll).
     if (!enabled) {
-      // Don't clear already-loaded images! Just don't start new loads.
-      if (status === 'idle' || status === 'loading') {
-        setStatus('idle');
-      }
+      setStatus((prev) => (prev === 'loading' ? 'idle' : prev));
       return;
     }
 
@@ -35,10 +33,8 @@ export function useProductImage(
       return;
     }
 
-    // Only start loading if not already loaded
-    if (status === 'loaded') return;
-
     let cancelled = false;
+    setImage(null);
     setStatus('loading');
 
     void loadSharedProductImage(imagePath, revision, hasWebp)
@@ -56,7 +52,9 @@ export function useProductImage(
     return () => {
       cancelled = true;
     };
-  }, [imagePath, revision, enabled, hasWebp, status]);
+    // Do NOT depend on `status` — that caused Maximum update depth exceeded
+    // (failed → loading → failed loop) and crashed the whole board.
+  }, [imagePath, revision, enabled, hasWebp]);
 
   return { image, status, forget: () => forgetSharedProductImage(imagePath, revision) };
 }
