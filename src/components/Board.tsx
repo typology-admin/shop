@@ -1,8 +1,14 @@
 import { Circle, Group, Line, Stage, Layer, Rect } from 'react-konva';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type Konva from 'konva';
 import { DEFAULT_BOARD_COLOR, PUBLIC_BOARD_COPIES } from '../../shared/constants.ts';
 import { useStageFit } from '../hooks/useStageFit.ts';
 import { bandOverlaps, readViewportBand } from '../hooks/useViewportBand.ts';
+import {
+  hitMaskContains,
+  peekProductHitMask,
+  worldToItemLocal,
+} from '../lib/productHitMask.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 import type { GravityWell } from '../lib/wells.ts';
 import { ProductNode } from './ProductNode.tsx';
@@ -82,6 +88,46 @@ function sameKeys(a: Set<string>, b: Set<string>): boolean {
   return true;
 }
 
+/** Top-most item under a canvas-space point (shared alpha masks, no Konva hit canvas). */
+function pickItemAt(
+  itemsTopFirst: Item[],
+  copies: number[],
+  canvasHeight: number,
+  canvasX: number,
+  canvasY: number,
+): Item | null {
+  for (const item of itemsTopFirst) {
+    const mask = peekProductHitMask(item.image_path, item.image_rev ?? 0);
+    for (const copy of copies) {
+      const centerY = item.y + copy * canvasHeight;
+      const local = worldToItemLocal(
+        canvasX,
+        canvasY,
+        item.x,
+        centerY,
+        item.scale,
+        item.rotation,
+      );
+      if (mask) {
+        if (hitMaskContains(mask, local.x, local.y, item.image_width, item.image_height)) {
+          return item;
+        }
+      } else {
+        // Mask not ready yet — fall back to bounds so early clicks still work.
+        const halfW = (item.image_width * item.scale) / 2;
+        const halfH = (item.image_height * item.scale) / 2;
+        if (
+          Math.abs(canvasX - item.x) <= halfW * 1.1 &&
+          Math.abs(canvasY - centerY) <= halfH * 1.1
+        ) {
+          return item;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 export function Board({
   items,
   mode,
@@ -110,9 +156,45 @@ export function Board({
   const [renderNear, setRenderNear] = useState<Set<string>>(() => new Set());
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
+  const stageRef = useRef<Konva.Stage | null>(null);
+  const hoverIdRef = useRef<string | null>(null);
+
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.z_index - b.z_index),
     [items],
+  );
+  const topFirst = useMemo(() => [...sorted].reverse(), [sorted]);
+
+  const pointerCanvas = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+    return stage.getRelativePointerPosition();
+  }, []);
+
+  const pickAtPointer = useCallback((): Item | null => {
+    const pos = pointerCanvas();
+    if (!pos) return null;
+    return pickItemAt(topFirst, activeCopies, fit.canvasHeight, pos.x, pos.y);
+  }, [pointerCanvas, topFirst, activeCopies, fit.canvasHeight]);
+
+  const handlePublicPointer = useCallback(
+    (kind: 'move' | 'click') => {
+      if (mode !== 'public') return;
+      const hit = pickAtPointer();
+      const stage = stageRef.current;
+      if (kind === 'move' && stage) {
+        const next = hit?.id ?? null;
+        if (hoverIdRef.current !== next) {
+          hoverIdRef.current = next;
+          stage.container().style.cursor = next ? 'pointer' : 'default';
+        }
+        return;
+      }
+      if (kind === 'click') {
+        onSelect?.(hit?.id ?? null);
+      }
+    },
+    [mode, pickAtPointer, onSelect],
   );
 
   useEffect(() => {
@@ -192,15 +274,31 @@ export function Board({
   return (
     <div className="board-scroll" data-loop={copies > 1 ? String(copies) : undefined}>
       <Stage
+        ref={stageRef}
         width={fit.stageWidth}
         height={fit.stageHeight * copies}
         x={fit.stageX}
         scaleX={fit.scale}
         scaleY={fit.scale}
+        onMouseMove={
+          mode === 'public'
+            ? () => {
+                handlePublicPointer('move');
+              }
+            : undefined
+        }
         onMouseDown={(event) => {
+          if (mode === 'public') {
+            handlePublicPointer('click');
+            return;
+          }
           if (event.target === event.target.getStage()) onSelect?.(null);
         }}
         onTap={(event) => {
+          if (mode === 'public') {
+            handlePublicPointer('click');
+            return;
+          }
           if (event.target === event.target.getStage()) onSelect?.(null);
         }}
       >

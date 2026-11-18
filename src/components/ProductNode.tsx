@@ -1,4 +1,3 @@
-import { HIT_ALPHA_THRESHOLD } from '../../shared/constants.ts';
 import { useLayoutEffect, useRef } from 'react';
 import { Image as KonvaImage, Transformer } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
@@ -6,6 +5,7 @@ import type { Image as KonvaImageNode } from 'konva/lib/shapes/Image';
 import type { Transformer as KonvaTransformerNode } from 'konva/lib/shapes/Transformer';
 import { useProductImage } from '../hooks/useProductImage.ts';
 import { clampScale } from '../lib/canvas.ts';
+import { ensureProductHitMask } from '../lib/productHitMask.ts';
 import type { Item, ItemPatch } from '../lib/types.ts';
 
 type Props = {
@@ -25,26 +25,13 @@ type Props = {
   onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
-function scheduleIdle(work: () => void): () => void {
-  const w = window as Window & {
-    requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    cancelIdleCallback?: (id: number) => void;
-  };
-  if (typeof w.requestIdleCallback === 'function') {
-    const id = w.requestIdleCallback(() => work(), { timeout: 1200 });
-    return () => w.cancelIdleCallback?.(id);
-  }
-  const id = window.setTimeout(work, 48);
-  return () => window.clearTimeout(id);
-}
-
 export function ProductNode({
   item,
   mode,
   selected,
   loadNear,
   renderNear,
-  stageScale,
+  stageScale: _stageScale,
   onSelect,
   onCommit,
   onLoaded,
@@ -54,6 +41,7 @@ export function ProductNode({
 }: Props) {
   const nodeRef = useRef<KonvaImageNode>(null);
   const transformerRef = useRef<KonvaTransformerNode>(null);
+  const admin = mode === 'admin';
   const { image, status } = useProductImage(item.image_path, item.image_rev ?? 0, {
     enabled: loadNear,
     hasWebp: item.has_webp ?? false,
@@ -65,22 +53,11 @@ export function ProductNode({
     else if (status === 'failed') onLoaded(item.id, false);
   }, [item.id, onLoaded, status]);
 
+  // One tiny alpha mask per image (shared across loop copies) — no Konva cache().
   useLayoutEffect(() => {
-    if (!renderNear || !image) return;
-    const node = nodeRef.current;
-    if (!node) return;
-
-    // Hit masks are expensive (canvas readback). Defer so scroll/wheel stay responsive.
-    // Low pixelRatio is enough for click-through on transparent padding.
-    const ratio = Math.min(0.25, 1 / Math.max(0.75, stageScale));
-    const cancel = scheduleIdle(() => {
-      if (!nodeRef.current) return;
-      nodeRef.current.cache({ pixelRatio: ratio });
-      nodeRef.current.drawHitFromCache(HIT_ALPHA_THRESHOLD);
-      nodeRef.current.getLayer()?.batchDraw();
-    });
-    return cancel;
-  }, [image, stageScale, renderNear]);
+    if (!image || status !== 'loaded') return;
+    void ensureProductHitMask(item.image_path, item.image_rev ?? 0, image);
+  }, [image, status, item.image_path, item.image_rev]);
 
   useLayoutEffect(() => {
     const transformer = transformerRef.current;
@@ -97,8 +74,6 @@ export function ProductNode({
   // Unmount off-screen nodes — decoded bitmaps stay in the shared image cache.
   if (!renderNear) return null;
   if (status !== 'loaded' || !image) return null;
-
-  const admin = mode === 'admin';
 
   function handleClick(event: KonvaEventObject<MouseEvent | TouchEvent | Event>) {
     event.cancelBubble = true;
@@ -120,18 +95,28 @@ export function ProductNode({
         offsetX={item.image_width / 2}
         offsetY={item.image_height / 2}
         draggable={admin}
+        // Public clicks use Board stage picking + shared alpha masks (avoids cache/hit canvases).
+        listening={admin}
         perfectDrawEnabled={false}
         imageSmoothingEnabled
-        onClick={handleClick}
-        onTap={handleClick}
-        onMouseEnter={(event) => {
-          const container = event.target.getStage()?.container();
-          if (container) container.style.cursor = admin ? 'grab' : 'pointer';
-        }}
-        onMouseLeave={(event) => {
-          const container = event.target.getStage()?.container();
-          if (container) container.style.cursor = 'default';
-        }}
+        onClick={admin ? handleClick : undefined}
+        onTap={admin ? handleClick : undefined}
+        onMouseEnter={
+          admin
+            ? (event) => {
+                const container = event.target.getStage()?.container();
+                if (container) container.style.cursor = 'grab';
+              }
+            : undefined
+        }
+        onMouseLeave={
+          admin
+            ? (event) => {
+                const container = event.target.getStage()?.container();
+                if (container) container.style.cursor = 'default';
+              }
+            : undefined
+        }
         onDragStart={(event) => {
           event.cancelBubble = true;
           onSelect(item.id);
