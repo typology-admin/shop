@@ -11,7 +11,9 @@
     "preview:pages": "npm run build && npx wrangler pages dev dist",
     "deploy": "npm run build && npx wrangler pages deploy dist",
     "backfill:webp": "tsx scripts/backfill-webp.ts",
-    "backfill:webp:dry-run": "tsx scripts/backfill-webp.ts --dry-run"
+    "backfill:webp:dry-run": "tsx scripts/backfill-webp.ts --dry-run",
+    "cleanup:dev-uploads": "tsx scripts/cleanup-dev-uploads.ts",
+    "cleanup:dev-uploads:dry-run": "tsx scripts/cleanup-dev-uploads.ts --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",

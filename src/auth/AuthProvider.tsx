@@ -42,6 +42,36 @@ async function resolveAdmin(user: User | null): Promise<boolean> {
   return Boolean(shopAdmin || networkAdmin);
 }
 
+/** Deduplicate concurrent role/profile lookups for the same user (StrictMode /
+ *  INITIAL_SESSION re-entry). Cleared on sign-out. */
+const adminByUserId = new Map<string, Promise<boolean>>();
+const profileByUserId = new Map<string, Promise<Profile | null>>();
+
+function resolveAdminCached(user: User | null): Promise<boolean> {
+  if (!user) return Promise.resolve(false);
+  if (isAdmin(user)) return Promise.resolve(true);
+  let pending = adminByUserId.get(user.id);
+  if (!pending) {
+    pending = resolveAdmin(user);
+    adminByUserId.set(user.id, pending);
+  }
+  return pending;
+}
+
+function fetchOwnProfileCached(userId: string): Promise<Profile | null> {
+  let pending = profileByUserId.get(userId);
+  if (!pending) {
+    pending = fetchOwnProfile(userId).catch(() => null);
+    profileByUserId.set(userId, pending);
+  }
+  return pending;
+}
+
+function clearAuthLookups() {
+  adminByUserId.clear();
+  profileByUserId.clear();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -63,27 +93,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false;
+    /** Skip re-applying the same access token (getSession + INITIAL_SESSION, or StrictMode). */
+    let completedToken: string | null | undefined;
+    let inflight: { token: string | null; promise: Promise<void> } | null = null;
 
     async function applySession(next: Session | null) {
-      const nextUser = next?.user ?? null;
-      setSession(next);
-      setUser(nextUser);
-      setEmail(nextUser?.email ?? null);
-      const [allowed, nextProfile] = await Promise.all([
-        resolveAdmin(nextUser),
-        nextUser ? fetchOwnProfile(nextUser.id).catch(() => null) : Promise.resolve(null),
-      ]);
-      if (cancelled) return;
-      setAdmin(allowed);
-      setProfile(nextProfile);
-      setReady(true);
+      const token = next?.access_token ?? null;
+      if (completedToken === token) {
+        if (!cancelled) setReady(true);
+        return;
+      }
+      if (inflight && inflight.token === token) {
+        await inflight.promise;
+        return;
+      }
+
+      const promise = (async () => {
+        const nextUser = next?.user ?? null;
+        if (!nextUser) clearAuthLookups();
+        setSession(next);
+        setUser(nextUser);
+        setEmail(nextUser?.email ?? null);
+        const [allowed, nextProfile] = await Promise.all([
+          resolveAdminCached(nextUser),
+          nextUser ? fetchOwnProfileCached(nextUser.id) : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setAdmin(allowed);
+        setProfile(nextProfile);
+        setReady(true);
+        completedToken = token;
+      })();
+
+      inflight = { token, promise };
+      try {
+        await promise;
+      } finally {
+        if (inflight?.promise === promise) inflight = null;
+      }
     }
 
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (cancelled) return;
-      await applySession(data.session);
-    });
-
+    // Prefer onAuthStateChange alone — it emits INITIAL_SESSION. Also calling
+    // getSession() duplicated admin_users / network_admins / profiles fetches.
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
       void applySession(next);
     });
@@ -147,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    clearAuthLookups();
     const supabase = getSupabase();
     if (!supabase) {
       localSignOut();
@@ -164,12 +216,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       return;
     }
-    setProfile(await fetchOwnProfile(user.id));
+    profileByUserId.delete(user.id);
+    const next = await fetchOwnProfile(user.id);
+    profileByUserId.set(user.id, Promise.resolve(next));
+    setProfile(next);
   }, [user]);
 
   const claimUsername = useCallback(
     async (username: string) => {
       if (!user) throw new Error('Sign in first.');
+      profileByUserId.delete(user.id);
       setProfile(await saveUsername(user.id, username));
     },
     [user],

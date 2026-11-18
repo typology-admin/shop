@@ -186,3 +186,16 @@ All new uploads automatically:
 2. Generate WebP version (once implemented in upload flow)
 
 The upload pipeline will be updated in a future commit to generate WebP at upload time, making this backfill a one-time operation.
+
+---
+
+# Cleanup `dev-uploads/` rows
+
+Local Vite uploads that wrote `dev-uploads/<uuid>.png` into the shared Supabase
+`items` table will 404 in production (the SPA HTML is returned instead). The
+client already skips those paths in production builds; delete the orphan rows:
+
+```bash
+npm run cleanup:dev-uploads:dry-run
+SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run cleanup:dev-uploads
+```

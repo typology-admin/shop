@@ -35,7 +35,10 @@ export function publicImageUrl(imagePath: string): string {
     return imagePath;
   }
 
+  // Local Vite uploads only. Production has no /dev-uploads static files —
+  // requesting them returns the SPA HTML and can stall onLoad for seconds.
   if (imagePath.startsWith('dev-uploads/')) {
+    if (import.meta.env.PROD) return '';
     return `/${imagePath}`;
   }
 
@@ -68,10 +71,12 @@ export async function resolveImageUrl(
   // For PNG files, try WebP version if browser supports it AND has_webp is true
   if (imagePath.endsWith('.png') && hasWebp && await supportsWebP()) {
     const webpPath = imagePath.replace(/\.png$/i, '.webp');
-    return publicImageUrl(webpPath);
+    const webpUrl = publicImageUrl(webpPath);
+    return webpUrl || null;
   }
-  
-  return publicImageUrl(imagePath);
+
+  const url = publicImageUrl(imagePath);
+  return url || null;
 }
 
 function loadHtmlImage(url: string): Promise<HTMLImageElement> {

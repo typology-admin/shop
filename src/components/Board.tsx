@@ -33,8 +33,10 @@ type Props = {
   onDragEndItem?: (id: string, x: number, y: number) => void;
 };
 
-/** Prefetch images a bit ahead of mount so scroll-in is warm. */
-const LOAD_PAD_PX = 1400;
+/** Prefetch images a bit ahead of mount so scroll-in is warm.
+ *  Keep tight — a wide pad fires every nearby WebP at once and stalls the
+ *  browser connection pool (see HAR blocked~1.3s at pad=1400). */
+const LOAD_PAD_PX = 640;
 /** Only mount Konva nodes near the viewport — keeps draw cost bounded. */
 const RENDER_PAD_PX = 320;
 
