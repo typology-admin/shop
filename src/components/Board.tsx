@@ -217,9 +217,9 @@ export function Board({
     }
     function refresh(fromScroll = false) {
       frame = 0;
-      const nextCopies = visibleCopyIndexes(copies, fit.canvasHeight, fit.scale);
-      // During first paint, only mount one loop copy so React/Konva don't thrash.
-      const copiesForMount = initialLoadComplete ? nextCopies : nextCopies.slice(0, 1);
+      // Always follow the scroll position — forcing copy 0 during first load left a
+      // blank board when infinite-scroll/landing placed the viewport in another copy.
+      const copiesForMount = visibleCopyIndexes(copies, fit.canvasHeight, fit.scale);
       setActiveCopies((prev) =>
         prev.length === copiesForMount.length && prev.every((v, i) => v === copiesForMount[i])
           ? prev
@@ -270,7 +270,11 @@ export function Board({
       const id = key.slice(key.indexOf(':') + 1);
       if (id) pendingIds.add(id);
     }
-    if (pendingIds.size === 0) return;
+    // Empty band (e.g. mid-jump) — don't stick on "Loading images…" forever.
+    if (pendingIds.size === 0) {
+      const timer = setTimeout(() => setInitialLoadComplete(true), 800);
+      return () => clearTimeout(timer);
+    }
 
     let ready = 0;
     for (const id of pendingIds) {
